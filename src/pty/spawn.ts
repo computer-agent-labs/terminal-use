@@ -1,4 +1,4 @@
-import * as nodePty from '@homebridge/node-pty-prebuilt-multiarch'
+import * as nodePty from '@lydell/node-pty'
 
 export interface SpawnOptions {
   shell?: string
