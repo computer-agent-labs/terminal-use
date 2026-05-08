@@ -6,6 +6,12 @@ import {bufferState, createTerminal, type BufferState} from '../emulator/termina
 import {keyToBytes} from '../pty/keys.js'
 import {defaultShell, spawnPty, type IPty} from '../pty/spawn.js'
 
+export interface ExitInfo {
+  exitCode: number
+  signal?: number
+  at: Date
+}
+
 export interface SessionConfig {
   shell?: string
   cwd?: string
@@ -26,6 +32,7 @@ export class TerminalSession {
   #config: SessionConfig
   #pendingFlushes: Array<Promise<void>> = []
   #disposed = false
+  #exited: ExitInfo | undefined
 
   constructor(config: SessionConfig) {
     this.#config = {
@@ -39,6 +46,7 @@ export class TerminalSession {
   }
 
   #spawn(): void {
+    this.#exited = undefined
     this.#term = createTerminal({
       cols: this.#config.cols,
       rows: this.#config.rows,
@@ -50,12 +58,21 @@ export class TerminalSession {
       cols: this.#config.cols,
       rows: this.#config.rows
     })
+    const myPty = this.#pty
     this.#pty.onData(chunk => {
+      if (this.#pty !== myPty) return
       const flush = new Promise<void>(resolve => this.#term.write(chunk, () => resolve()))
       this.#pendingFlushes.push(flush)
     })
     this.#term.onData(chunk => {
+      if (this.#pty !== myPty) return
       this.#pty.write(chunk)
+    })
+    this.#pty.onExit(({exitCode, signal}) => {
+      // Ignore exit events from a pty that was already replaced (e.g. via
+      // hardReset) — only the currently-active pty's exit should be tracked.
+      if (this.#pty !== myPty) return
+      this.#exited = {exitCode, signal, at: new Date()}
     })
   }
 
@@ -73,8 +90,26 @@ export class TerminalSession {
     return this.#config
   }
 
+  get exited(): ExitInfo | undefined {
+    return this.#exited
+  }
+
+  get isAlive(): boolean {
+    return !this.#disposed && !this.#exited
+  }
+
   #assertAlive(): void {
     if (this.#disposed) throw new Error('TerminalSession has been disposed')
+  }
+
+  /**
+   * Wait for the freshly-spawned shell to print its prompt and settle. Used
+   * after auto-respawn so the next tool call doesn't race the prompt redraw.
+   */
+  async waitForReady(): Promise<void> {
+    this.#assertAlive()
+    await waitSettled(ptyAsSource(this.#pty), {idleMs: 200, maxWaitMs: 3000})
+    await this.flush()
   }
 
   async flush(): Promise<void> {

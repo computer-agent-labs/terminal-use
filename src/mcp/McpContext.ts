@@ -1,4 +1,4 @@
-import {TerminalSession, type SessionConfig} from '../session/TerminalSession.js'
+import {TerminalSession, type ExitInfo, type SessionConfig} from '../session/TerminalSession.js'
 
 export interface ContextDefaults {
   cols: number
@@ -43,6 +43,39 @@ export class McpContext {
       })
     }
     return this.#session
+  }
+
+  /**
+   * Called once per tool invocation, before the handler runs. Lazy-creates
+   * the session, and if the previous shell has exited since the last call,
+   * disposes it and spawns a fresh one (returning the exit info so the
+   * handler can surface a notice to the agent and skip the action).
+   */
+  async prepareForCall(): Promise<{respawned?: ExitInfo}> {
+    if (!this.#session) {
+      this.#session = new TerminalSession({
+        cols: this.#defaults.cols,
+        rows: this.#defaults.rows,
+        scrollback: this.#defaults.scrollback,
+        shell: this.#defaults.shell,
+        cwd: this.#defaults.cwd
+      })
+      return {}
+    }
+    if (this.#session.exited) {
+      const previousExit = this.#session.exited
+      this.#session.dispose()
+      this.#session = new TerminalSession({
+        cols: this.#defaults.cols,
+        rows: this.#defaults.rows,
+        scrollback: this.#defaults.scrollback,
+        shell: this.#defaults.shell,
+        cwd: this.#defaults.cwd
+      })
+      await this.#session.waitForReady()
+      return {respawned: previousExit}
+    }
+    return {}
   }
 
   hasSession(): boolean {

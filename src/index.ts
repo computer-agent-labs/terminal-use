@@ -5,7 +5,32 @@ import {McpContext, type ContextDefaults} from './mcp/McpContext.js'
 import {McpResponse} from './mcp/McpResponse.js'
 import {Mutex} from './mcp/Mutex.js'
 import {TOOLS} from './mcp/tools/index.js'
+import type {ExitInfo} from './session/TerminalSession.js'
 import {VERSION} from './version.js'
+
+const SIGNAL_NAMES: Record<number, string> = {
+  1: 'SIGHUP',
+  2: 'SIGINT',
+  3: 'SIGQUIT',
+  6: 'SIGABRT',
+  9: 'SIGKILL',
+  11: 'SIGSEGV',
+  13: 'SIGPIPE',
+  14: 'SIGALRM',
+  15: 'SIGTERM'
+}
+
+function formatRespawnNotice(exit: ExitInfo): string {
+  const parts = [`exit code ${exit.exitCode}`]
+  if (exit.signal !== undefined) {
+    parts.push(`signal ${SIGNAL_NAMES[exit.signal] ?? exit.signal}`)
+  }
+  return (
+    `The shell exited (${parts.join(', ')}) at ${exit.at.toISOString()} between ` +
+    'the last call and this one. A fresh shell has been spawned and is ready ' +
+    "for new commands — re-issue your command if it's still relevant."
+  )
+}
 
 export interface CreateOptions {
   defaults?: Partial<ContextDefaults>
@@ -29,7 +54,12 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
       const release = await mutex.acquire()
       const response = new McpResponse()
       try {
-        await tool.handler({params: params as never}, response, context)
+        const prep = await context.prepareForCall()
+        if (prep.respawned) {
+          response.setError(formatRespawnNotice(prep.respawned))
+        } else {
+          await tool.handler({params: params as never}, response, context)
+        }
       } catch (err) {
         const message =
           err instanceof Error
@@ -57,12 +87,9 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
     registerOne(tool)
   }
 
-  const cleanup = () => {
-    context.dispose()
-  }
-  process.once('SIGINT', cleanup)
-  process.once('SIGTERM', cleanup)
-  process.once('exit', cleanup)
-
+  // No process-level signal handlers — when our process exits, the kernel
+  // closes the PTY which delivers SIGHUP to the shell, cleaning up the
+  // child tree without us doing anything explicit. Tests would accumulate
+  // listeners across many createMcpServer calls if we registered any here.
   return server
 }

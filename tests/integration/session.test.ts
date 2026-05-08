@@ -95,4 +95,31 @@ describe('TerminalSession', () => {
     active = null
     expect(() => s.read(10, 0)).toThrow()
   })
+
+  it('records exit info when the shell process dies', async () => {
+    const s = makeSession()
+    expect(s.exited).toBeUndefined()
+    expect(s.isAlive).toBe(true)
+    await s.writeText('exit\n', {idleMs: 200, maxWaitMs: 2000})
+    // Give the pty a moment to fire its exit event.
+    for (let i = 0; i < 30 && !s.exited; i++) {
+      await new Promise(r => setTimeout(r, 100))
+    }
+    expect(s.exited).toBeDefined()
+    expect(typeof s.exited!.exitCode).toBe('number')
+    expect(s.exited!.at).toBeInstanceOf(Date)
+    expect(s.isAlive).toBe(false)
+  })
+
+  it('hardReset on an exited session drops the old exit info', async () => {
+    const s = makeSession()
+    s.pty.kill()
+    for (let i = 0; i < 30 && !s.exited; i++) {
+      await new Promise(r => setTimeout(r, 50))
+    }
+    expect(s.exited).toBeDefined()
+    await s.hardReset({})
+    expect(s.exited).toBeUndefined()
+    expect(s.isAlive).toBe(true)
+  })
 })

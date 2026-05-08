@@ -32,6 +32,13 @@ export const read = defineTool({
       .optional()
       .describe(
         '0 = newest screen-sized window. N = scroll up N pages (each page = `rows` lines). Past-top clamps.'
+      ),
+    cursor: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true (default), inject "▌" at the cursor position inline in the rendered text. ' +
+          'Set to false if you need the unmodified text.'
       )
   },
   annotations: {readOnlyHint: true},
@@ -39,9 +46,10 @@ export const read = defineTool({
     const session = context.getSession()
     const rows = request.params.rows ?? session.term.rows
     const page = request.params.page ?? 0
+    const showCursor = request.params.cursor ?? true
     const win = session.read(rows, page)
     appendBufferState(response, win.state)
     response.appendBlank()
-    renderReadWindow(response, win)
+    renderReadWindow(response, win, {showCursor})
   }
 })

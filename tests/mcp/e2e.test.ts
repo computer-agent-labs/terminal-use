@@ -111,6 +111,49 @@ describe('MCP end-to-end', () => {
     }
   })
 
+  it('terminal_read marks the cursor inline by default and can opt out', async () => {
+    await call(harness.client, 'terminal_type', {
+      text: 'echo cursor-marker-test\n',
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    const withMark = await call(harness.client, 'terminal_read', {})
+    expect(withMark.text).toContain('▌')
+    expect(withMark.text).toMatch(/cursor marked with/)
+    const noMark = await call(harness.client, 'terminal_read', {cursor: false})
+    expect(noMark.text).not.toContain('▌')
+    expect(noMark.text).not.toMatch(/cursor marked with/)
+  })
+
+  it('auto-respawns the shell when it has died between calls', async () => {
+    // Trigger a real shell exit and wait for the pty to actually be dead.
+    await call(harness.client, 'terminal_type', {
+      text: 'exit\n',
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    await new Promise(r => setTimeout(r, 800))
+    // Next call should detect the dead shell, respawn, and return a notice
+    // instead of running the requested action.
+    const r = await call(harness.client, 'terminal_type', {
+      text: 'echo after-respawn\n',
+      idleMs: 200,
+      maxWaitMs: 2000
+    })
+    expect(r.isError).toBe(true)
+    expect(r.text).toMatch(/shell exited.*at .* between/i)
+    expect(r.text).toMatch(/fresh shell has been spawned/i)
+    // Calling again should now work against the new shell.
+    const r2 = await call(harness.client, 'terminal_type', {
+      text: 'echo after-respawn-2\n',
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    expect(r2.isError).toBe(false)
+    const read = await call(harness.client, 'terminal_read', {})
+    expect(read.text).toMatch(/after-respawn-2/)
+  })
+
   it('paginated read returns earlier window', async () => {
     await call(harness.client, 'terminal_type', {
       text: 'i=1; while [ $i -le 150 ]; do echo line$i; i=$((i+1)); done\n',
