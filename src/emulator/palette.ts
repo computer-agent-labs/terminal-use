@@ -1,0 +1,106 @@
+export interface ThemeColors {
+  background: string
+  foreground: string
+  cursor: string
+  ansi: readonly string[]
+}
+
+export const DARK_PLUS: ThemeColors = {
+  background: '#1e1e1e',
+  foreground: '#cccccc',
+  cursor: '#ffffff',
+  ansi: [
+    '#000000',
+    '#cd3131',
+    '#0dbc79',
+    '#e5e510',
+    '#2472c8',
+    '#bc3fbc',
+    '#11a8cd',
+    '#e5e5e5',
+    '#666666',
+    '#f14c4c',
+    '#23d18b',
+    '#f5f543',
+    '#3b8eea',
+    '#d670d6',
+    '#29b8db',
+    '#ffffff'
+  ]
+}
+
+const CUBE_LEVELS = [0, 95, 135, 175, 215, 255]
+
+function paletteIndexToHex(theme: ThemeColors, idx: number): string {
+  if (idx < 0 || idx > 255) return theme.foreground
+  if (idx < 16) return theme.ansi[idx]!
+  if (idx < 232) {
+    const offset = idx - 16
+    const r = Math.floor(offset / 36)
+    const g = Math.floor((offset % 36) / 6)
+    const b = offset % 6
+    return rgbToHex(CUBE_LEVELS[r]!, CUBE_LEVELS[g]!, CUBE_LEVELS[b]!)
+  }
+  const v = 8 + (idx - 232) * 10
+  return rgbToHex(v, v, v)
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const h = (n: number) => n.toString(16).padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+export function packedRgbToHex(packed: number): string {
+  const r = (packed >> 16) & 0xff
+  const g = (packed >> 8) & 0xff
+  const b = packed & 0xff
+  return rgbToHex(r, g, b)
+}
+
+export interface CellColor {
+  fg: string
+  bg: string
+}
+
+export interface CellLike {
+  isFgDefault(): boolean
+  isFgRGB(): boolean
+  isFgPalette(): boolean
+  getFgColor(): number
+  isBgDefault(): boolean
+  isBgRGB(): boolean
+  isBgPalette(): boolean
+  getBgColor(): number
+  isInverse(): number
+  isBold(): number
+  isDim(): number
+  isInvisible(): number
+}
+
+export function resolveCellColors(cell: CellLike, theme: ThemeColors): CellColor {
+  let fg: string
+  let bg: string
+
+  if (cell.isFgDefault()) fg = theme.foreground
+  else if (cell.isFgRGB()) fg = packedRgbToHex(cell.getFgColor())
+  else if (cell.isFgPalette()) fg = paletteIndexToHex(theme, cell.getFgColor())
+  else fg = theme.foreground
+
+  if (cell.isBgDefault()) bg = theme.background
+  else if (cell.isBgRGB()) bg = packedRgbToHex(cell.getBgColor())
+  else if (cell.isBgPalette()) bg = paletteIndexToHex(theme, cell.getBgColor())
+  else bg = theme.background
+
+  if (cell.isInverse()) {
+    const tmp = fg
+    fg = bg
+    bg = tmp
+  }
+  if (cell.isInvisible()) {
+    fg = bg
+  }
+
+  return {fg, bg}
+}
+
+export {paletteIndexToHex}

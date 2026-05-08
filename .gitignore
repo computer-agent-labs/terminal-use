@@ -1,0 +1,11 @@
+node_modules/
+build/
+*.tsbuildinfo
+*.log
+.DS_Store
+.eslintcache
+coverage/
+/tmp/
+
+# Reference implementation kept locally for inspiration only — not part of this project
+chrome-devtools-mcp/
