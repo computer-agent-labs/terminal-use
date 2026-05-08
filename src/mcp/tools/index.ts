@@ -8,7 +8,6 @@ import {read} from './read.js'
 import {reset} from './reset.js'
 import {resize} from './resize.js'
 import {screenshot} from './screenshot.js'
-import {select} from './select.js'
 import {typeText} from './type.js'
 
 export const TOOLS: ToolDefinition[] = [
@@ -20,6 +19,5 @@ export const TOOLS: ToolDefinition[] = [
   reset,
   resize,
   screenshot,
-  select,
   typeText
 ].sort((a, b) => a.name.localeCompare(b.name)) as ToolDefinition[]

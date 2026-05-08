@@ -5,8 +5,10 @@ import {defineTool} from '../ToolDefinition.js'
 export const destroy = defineTool({
   name: 'terminal_destroy',
   description:
-    'Kill a session and remove it from the list. The shell process is terminated. ' +
-    'If the destroyed session was the current default, another remaining session (if any) becomes the default.',
+    'Kill a session and forget the sessionId entirely. The shell process is terminated and the ' +
+    'sessionId is *not* tombstoned — future calls against it will error with "Unknown sessionId". ' +
+    "Use this when you're explicitly done with a session. Tombstones (which auto-respawn on next " +
+    'access) only happen for system-driven terminations: idle-kill, eviction, or shell exit.',
   schema: {
     sessionId: z.number().int().min(1).describe('Numeric id from terminal_create or terminal_list.')
   },
@@ -15,15 +17,8 @@ export const destroy = defineTool({
   handler: async (request, response, context) => {
     const desc = context.destroySession(request.params.sessionId)
     response.appendLine(
-      `Destroyed session ${desc.sessionId}${desc.label ? ` "${desc.label}"` : ''} (was pid ${desc.pid}).`
+      `Destroyed session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}` +
+        (desc.pid > 0 ? ` (was pid ${desc.pid}).` : ' (was already tombstoned).')
     )
-    const remaining = context.listSessions()
-    if (remaining.length === 0) {
-      response.appendLine('No sessions remain. Next tool call will auto-create a fresh default.')
-    } else {
-      response.appendLine(
-        `${remaining.length} session(s) remaining; current default: ${context.currentId ?? '(none)'}.`
-      )
-    }
   }
 })

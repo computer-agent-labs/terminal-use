@@ -3,36 +3,31 @@ import {z} from 'zod'
 import type {SettleResult} from '../../emulator/settle.js'
 import type {BufferState} from '../../emulator/terminal.js'
 import type {ReadWindow} from '../../session/TerminalSession.js'
-import type {McpContext, SessionDescriptor} from '../McpContext.js'
+import type {SessionDescriptor, TombstoneDescriptor} from '../McpContext.js'
 import type {McpResponse} from '../McpResponse.js'
 
-export const sessionIdField = z
+export const requiredSessionIdField = z
   .number()
   .int()
   .min(1)
-  .optional()
   .describe(
-    'Numeric id of the session to target (from terminal_create or terminal_list). ' +
-      'Omit to target the current default session (auto-created on first use).'
+    'Numeric id of the session to target. Get one by calling terminal_create. ' +
+      'Use terminal_list to enumerate currently-known ids.'
   )
 
-export function appendSessionHeader(
-  response: McpResponse,
-  context: McpContext,
-  sessionId: number
-): void {
-  const label = context.labelOf(sessionId)
-  const tag = label ? `${sessionId} (${label})` : `${sessionId}`
-  response.appendLine(`Session ${tag}.`)
+export function describeSessionLine(d: SessionDescriptor): string {
+  const tag = d.label ? `${d.sessionId} ("${d.label}")` : `${d.sessionId}`
+  const idleSecs = Math.round((Date.now() - d.lastActivityAt.getTime()) / 1000)
+  return `[${tag}] ${d.cols}x${d.rows} pid=${d.pid} shell=${d.shell || '?'} cwd=${d.cwd || '?'} idle=${idleSecs}s`
 }
 
-export function describeSessionLine(d: SessionDescriptor): string {
-  const tag = d.label ? `${d.sessionId} (${d.label})` : `${d.sessionId}`
-  const liveness = d.isAlive
-    ? `alive pid=${d.pid}`
-    : `EXITED at ${d.exitedAt?.toISOString()} code=${d.exitCode}${d.exitSignal !== undefined ? ` signal=${d.exitSignal}` : ''}`
-  const star = d.isCurrent ? '* ' : '  '
-  return `${star}[${tag}] ${d.cols}x${d.rows} ${liveness} shell=${d.shell || '?'} cwd=${d.cwd || '?'}`
+export function describeTombstoneLine(t: TombstoneDescriptor): string {
+  const tag = t.label ? `${t.sessionId} ("${t.label}")` : `${t.sessionId}`
+  const exit =
+    t.reason === 'shell-exit' && t.exitCode !== undefined
+      ? ` (exit code ${t.exitCode}${t.exitSignal !== undefined ? `, signal ${t.exitSignal}` : ''})`
+      : ''
+  return `[${tag}] tombstoned: ${t.reason}${exit} at ${t.at.toISOString()}, expires ${t.expiresAt.toISOString()}`
 }
 
 export function appendSettleNote(

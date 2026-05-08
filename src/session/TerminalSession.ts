@@ -33,6 +33,7 @@ export class TerminalSession {
   #pendingFlushes: Array<Promise<void>> = []
   #disposed = false
   #exited: ExitInfo | undefined
+  #exitListeners: Array<(info: ExitInfo) => void> = []
 
   constructor(config: SessionConfig) {
     this.#config = {
@@ -72,8 +73,26 @@ export class TerminalSession {
       // Ignore exit events from a pty that was already replaced (e.g. via
       // hardReset) — only the currently-active pty's exit should be tracked.
       if (this.#pty !== myPty) return
-      this.#exited = {exitCode, signal, at: new Date()}
+      const info = {exitCode, signal, at: new Date()}
+      this.#exited = info
+      if (!this.#disposed) {
+        for (const cb of [...this.#exitListeners]) {
+          try {
+            cb(info)
+          } catch {
+            // listener errors must not break the pty event loop
+          }
+        }
+      }
     })
+  }
+
+  onExit(cb: (info: ExitInfo) => void): () => void {
+    this.#exitListeners.push(cb)
+    return () => {
+      const i = this.#exitListeners.indexOf(cb)
+      if (i >= 0) this.#exitListeners.splice(i, 1)
+    }
   }
 
   get pty(): IPty {

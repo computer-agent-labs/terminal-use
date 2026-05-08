@@ -1,11 +1,10 @@
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js'
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js'
 
-import {McpContext, type ContextDefaults} from './mcp/McpContext.js'
+import {McpContext, type ContextOptions, type RespawnReason} from './mcp/McpContext.js'
 import {McpResponse} from './mcp/McpResponse.js'
 import {Mutex} from './mcp/Mutex.js'
 import {TOOLS} from './mcp/tools/index.js'
-import type {ExitInfo} from './session/TerminalSession.js'
 import {VERSION} from './version.js'
 
 const SIGNAL_NAMES: Record<number, string> = {
@@ -20,21 +19,31 @@ const SIGNAL_NAMES: Record<number, string> = {
   15: 'SIGTERM'
 }
 
-function formatRespawnNotice(exit: ExitInfo, sessionId: number): string {
-  const parts = [`exit code ${exit.exitCode}`]
-  if (exit.signal !== undefined) {
-    parts.push(`signal ${SIGNAL_NAMES[exit.signal] ?? exit.signal}`)
-  }
-  return (
-    `Session ${sessionId}'s shell exited (${parts.join(', ')}) at ${exit.at.toISOString()} between ` +
-    'the last call and this one. A fresh shell has been spawned (reusing the same sessionId) and is ' +
-    "ready for new commands — re-issue your command if it's still relevant."
-  )
+function tag(sessionId: number, label?: string): string {
+  return label ? `Session ${sessionId} ("${label}")` : `Session ${sessionId}`
 }
 
-export interface CreateOptions {
-  defaults?: Partial<ContextDefaults>
+function formatRespawnNotice(reason: RespawnReason, sessionId: number): string {
+  const head = tag(sessionId, reason.label)
+  const tail =
+    'A fresh shell has been spawned (reusing the same sessionId) and is ready for new commands — ' +
+    "re-issue your command if it's still relevant."
+  switch (reason.kind) {
+    case 'shell-exit': {
+      const parts = [`exit code ${reason.exit.exitCode}`]
+      if (reason.exit.signal !== undefined) {
+        parts.push(`signal ${SIGNAL_NAMES[reason.exit.signal] ?? reason.exit.signal}`)
+      }
+      return `${head}'s shell exited (${parts.join(', ')}) at ${reason.exit.at.toISOString()} between calls. ${tail}`
+    }
+    case 'idle-killed':
+      return `${head} was terminated due to inactivity at ${reason.at.toISOString()}. ${tail}`
+    case 'evicted':
+      return `${head} was evicted at ${reason.at.toISOString()} because the session cap was reached and this was the least-recently-used session. ${tail}`
+  }
 }
+
+export type CreateOptions = ContextOptions
 
 export function createMcpServer(options: CreateOptions = {}): McpServer {
   const server = new McpServer(
@@ -46,7 +55,7 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
     {capabilities: {}}
   )
 
-  const context = new McpContext(options.defaults)
+  const context = new McpContext(options)
   const mutex = new Mutex()
 
   const registerOne = (tool: (typeof TOOLS)[number]) => {
@@ -57,16 +66,21 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
         if (tool.needsSession === false) {
           await tool.handler({params: params as never}, response, context)
         } else {
-          const sessionId =
-            typeof params.sessionId === 'number' ? (params.sessionId as number) : undefined
-          const prep = await context.prepareForCall(sessionId)
-          if (prep.respawned) {
-            response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
+          if (typeof params.sessionId !== 'number') {
+            response.setError(
+              `Tool ${tool.name} requires \`sessionId\`. Call terminal_create first to allocate one, ` +
+                'or terminal_list to enumerate currently-known ids.'
+            )
           } else {
-            try {
-              await tool.handler({params: params as never}, response, context)
-            } finally {
-              context.clearActiveCall()
+            const prep = await context.prepareForCall(params.sessionId as number)
+            if (prep.respawned) {
+              response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
+            } else {
+              try {
+                await tool.handler({params: params as never}, response, context)
+              } finally {
+                context.clearActiveCall()
+              }
             }
           }
         }

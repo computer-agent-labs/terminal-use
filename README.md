@@ -16,29 +16,32 @@ actually is), not the raw byte stream.
 
 ## Tools
 
-### Per-session (act on a terminal)
+### Per-session (act on a specific terminal)
+
+Each of these requires `sessionId`. Get one by calling `terminal_create`.
 
 | Tool | Purpose |
 |---|---|
 | `terminal_type` | Type literal characters; `\n` is normalized to Enter. |
-| `terminal_press` | Press named keys/combos (`Enter`, `Ctrl+C`, `ArrowUp`, `Shift+Tab`, `F1`...). |
+| `terminal_press` | Press named keys/combos (`Enter`, `Ctrl+C`, `ArrowUp`, `Shift+Tab`, `F1`…). |
 | `terminal_resize` | Change cols/rows; either is optional (preserves current). |
 | `terminal_reset` | Wipe buffer; `hardReset: true` kills + respawns the shell. |
 | `terminal_read` | Read the buffer, paginated in screen-sized windows. Cursor marked inline by default. |
 | `terminal_screenshot` | PNG of the current screen (or any earlier screen-sized window via `page`). |
 
-Each accepts an optional `sessionId` to target a specific session; omit it to target the current default (auto-created on first use, so single-session agents never have to think about it).
-
 ### Session management
 
 | Tool | Purpose |
 |---|---|
-| `terminal_create` | Spawn a new terminal session and return its numeric id; optional `label` for terminal_list display. |
-| `terminal_list` | List every active session; the current default is starred. Dead-shell sessions show their exit info. |
-| `terminal_select` | Set which session is the current default for tools that omit `sessionId`. |
-| `terminal_destroy` | Kill a session and remove it. |
+| `terminal_create` | Spawn a new session and return its numeric id; optional `label` for `terminal_list` display. |
+| `terminal_list` | List live sessions and tombstoned ids. |
+| `terminal_destroy` | Kill a session and forget the id entirely. |
 
-When a session's shell exits between tool calls (e.g. the agent typed `exit`), the next tool call against that session auto-respawns it under the same `sessionId` and returns a notice with the exit code/signal.
+### Lifecycle
+
+- **`sessionId` is required on every per-session tool.** There is no shared default. Two MCP clients (or two Claude Code sessions sharing one server) cannot accidentally talk to the same shell.
+- **Sessions go to the tombstone for system-driven termination, not for `terminal_destroy`.** If the shell exits, the session sits idle for over 6 hours, or the 50-session cap forces an LRU eviction, the sessionId is *retained as a tombstone for 30 days*. Calling against a tombstoned id auto-respawns a fresh shell under the same id and returns a notice quoting the original termination reason.
+- **`terminal_destroy` is a hard delete.** No tombstone — future calls against the id error with "Unknown sessionId."
 
 ## Install
 

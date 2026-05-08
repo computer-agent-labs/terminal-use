@@ -7,18 +7,17 @@ import {describeSessionLine} from './shared.js'
 export const create = defineTool({
   name: 'terminal_create',
   description:
-    'Spawn a new terminal session and return its sessionId. Use this at the start of a task ' +
-    'when you want a clean, independent shell rather than continuing whatever session is current. ' +
-    'If no session existed before, the new one becomes the current default automatically. ' +
-    'Other tools can target this session by passing `sessionId`, or you can call `terminal_select` ' +
-    'to make it the new default.',
+    'Spawn a new terminal session and return its sessionId. You must call this before any per-session ' +
+    'tool — there is no shared default session. ' +
+    'If the server already holds 50 live sessions, the least-recently-used one is evicted to make room ' +
+    "(its sessionId is tombstoned and any later call against it will respawn with an 'evicted' notice).",
   schema: {
     label: z
       .string()
       .min(1)
       .max(64)
       .optional()
-      .describe('Optional human-readable name shown by terminal_list (e.g. "dev-server", "tests").'),
+      .describe('Optional human-readable name shown in terminal_list output (e.g. "dev-server").'),
     cols: z.number().int().min(1).max(1000).optional(),
     rows: z.number().int().min(1).max(1000).optional(),
     shell: z.string().optional().describe('Override the default shell (e.g. "/bin/zsh").'),
@@ -36,8 +35,7 @@ export const create = defineTool({
       cwd: request.params.cwd,
       scrollback: request.params.scrollback
     })
-    response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` "${desc.label}"` : ''}.`)
-    response.appendBlank()
+    response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)
     response.appendLine(describeSessionLine(desc))
   }
 })

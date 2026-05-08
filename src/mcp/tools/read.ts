@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSessionHeader, renderReadWindow, sessionIdField} from './shared.js'
+import {appendBufferState, renderReadWindow, requiredSessionIdField} from './shared.js'
 
 export const READ_MAX_ROWS = 1000
 
@@ -16,7 +16,7 @@ export const read = defineTool({
     '`page: 0` is the most recent screen-sized chunk; `page: 1` is the screen before that, and so on. ' +
     'Trailing blank rows are trimmed implicitly.',
   schema: {
-    sessionId: sessionIdField,
+    sessionId: requiredSessionIdField,
     rows: z
       .number()
       .int()
@@ -45,7 +45,6 @@ export const read = defineTool({
   annotations: {readOnlyHint: true},
   handler: async (request, response, context) => {
     const session = context.session()
-    appendSessionHeader(response, context, context.activeId())
     const rows = request.params.rows ?? session.term.rows
     const page = request.params.page ?? 0
     const showCursor = request.params.cursor ?? true

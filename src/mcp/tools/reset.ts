@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSessionHeader, sessionIdField} from './shared.js'
+import {appendBufferState, requiredSessionIdField} from './shared.js'
 
 export const reset = defineTool({
   name: 'terminal_reset',
@@ -12,7 +12,7 @@ export const reset = defineTool({
     'and spawn a brand-new one — anything mid-execution gets killed. ' +
     'When `hardReset: true`, you can also override `cols`, `rows`, `shell`, and `cwd`.',
   schema: {
-    sessionId: sessionIdField,
+    sessionId: requiredSessionIdField,
     hardReset: z
       .boolean()
       .optional()
@@ -25,7 +25,6 @@ export const reset = defineTool({
   annotations: {readOnlyHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
-    appendSessionHeader(response, context, context.activeId())
     if (request.params.hardReset) {
       await session.hardReset({
         cols: request.params.cols,

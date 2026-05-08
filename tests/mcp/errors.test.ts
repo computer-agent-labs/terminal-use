@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 
-import {call, startServer, type ServerHarness} from './helpers.js'
+import {call, createSession, startServer, type ServerHarness} from './helpers.js'
 
 let harness: ServerHarness
 
@@ -14,36 +14,40 @@ afterEach(async () => {
 
 describe('MCP error paths', () => {
   it('rows > 1000 in read is rejected by schema validation', async () => {
-    const r = await call(harness.client, 'terminal_read', {rows: 9999})
+    const id = await createSession(harness.client)
+    const r = await call(harness.client, 'terminal_read', {sessionId: id, rows: 9999})
     expect(r.isError).toBe(true)
     expect(r.text).toMatch(/less than or equal to 1000|too_big/i)
   })
 
   it('cols=0 in resize is rejected by schema validation', async () => {
-    const r = await call(harness.client, 'terminal_resize', {cols: 0})
+    const id = await createSession(harness.client)
+    const r = await call(harness.client, 'terminal_resize', {sessionId: id, cols: 0})
     expect(r.isError).toBe(true)
   })
 
   it('handler error for unknown key surfaces as isError + message', async () => {
-    const r = await call(harness.client, 'terminal_press', {key: 'NotARealKey'})
+    const id = await createSession(harness.client)
+    const r = await call(harness.client, 'terminal_press', {sessionId: id, key: 'NotARealKey'})
     expect(r.isError).toBe(true)
     expect(r.text).toMatch(/Unknown key/i)
   })
 
   it('hard reset to a missing cwd does not crash the server', async () => {
-    // node-pty may or may not propagate the chdir failure depending on platform;
-    // we only require that the server stays responsive afterwards.
+    const id = await createSession(harness.client)
     await call(harness.client, 'terminal_reset', {
+      sessionId: id,
       hardReset: true,
       cwd: '/this/path/should/not/exist/anywhere'
     })
-    const r = await call(harness.client, 'terminal_read', {})
+    const r = await call(harness.client, 'terminal_read', {sessionId: id})
     expect(r.isError).toBe(false)
   })
 
   it('handler error does not crash the server (subsequent calls work)', async () => {
-    await call(harness.client, 'terminal_press', {key: 'NotARealKey'})
-    const r = await call(harness.client, 'terminal_read', {})
+    const id = await createSession(harness.client)
+    await call(harness.client, 'terminal_press', {sessionId: id, key: 'NotARealKey'})
+    const r = await call(harness.client, 'terminal_read', {sessionId: id})
     expect(r.isError).toBe(false)
   })
 })
