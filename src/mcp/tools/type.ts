@@ -2,13 +2,14 @@ import {z} from 'zod'
 
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
+
 import {appendBufferState, appendSettleNote, renderReadWindow} from './shared.js'
 
 export const typeText = defineTool({
   name: 'terminal_type',
   description:
     'Type literal characters into the terminal as if a human were pressing keys. ' +
-    "Embedded `\\n` is normalized to `\\r` so `\"git push\\n\"` actually submits. " +
+    'Embedded `\\n` is normalized to `\\r` so `"git push\\n"` actually submits. ' +
     'Always waits for the buffer to settle (or to time out) before returning. ' +
     'If `maxWaitMs > 10000`, returns immediately without waiting and asks you to ' +
     'call `terminal_read` later.',

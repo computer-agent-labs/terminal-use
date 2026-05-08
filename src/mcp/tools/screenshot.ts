@@ -6,6 +6,7 @@ import {z} from 'zod'
 
 import {renderToPng} from '../../emulator/render.js'
 import {defineTool} from '../ToolDefinition.js'
+
 import {appendBufferState} from './shared.js'
 
 const INLINE_LIMIT_BYTES = 2 * 1024 * 1024

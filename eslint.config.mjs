@@ -5,7 +5,13 @@ import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
   {
-    ignores: ['build/**', 'node_modules/**', 'coverage/**', 'fonts/**']
+    ignores: [
+      'build/**',
+      'node_modules/**',
+      'coverage/**',
+      'fonts/**',
+      'chrome-devtools-mcp/**'
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

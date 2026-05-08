@@ -1,5 +1,5 @@
-import type {BufferState} from '../../emulator/terminal.js'
 import type {SettleResult} from '../../emulator/settle.js'
+import type {BufferState} from '../../emulator/terminal.js'
 import type {ReadWindow} from '../../session/TerminalSession.js'
 import type {McpResponse} from '../McpResponse.js'
 

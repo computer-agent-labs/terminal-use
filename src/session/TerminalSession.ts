@@ -1,8 +1,8 @@
 import type {Terminal} from '@xterm/headless'
 
-import {bufferState, createTerminal, type BufferState} from '../emulator/terminal.js'
 import {windowMath, type Window} from '../emulator/pagination.js'
 import {ptyAsSource, waitSettled, type SettleOptions, type SettleResult} from '../emulator/settle.js'
+import {bufferState, createTerminal, type BufferState} from '../emulator/terminal.js'
 import {keyToBytes} from '../pty/keys.js'
 import {defaultShell, spawnPty, type IPty} from '../pty/spawn.js'
 
