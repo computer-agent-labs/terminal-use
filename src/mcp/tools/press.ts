@@ -3,7 +3,7 @@ import {z} from 'zod'
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSettleNote, renderReadWindow} from './shared.js'
+import {appendBufferState, appendSessionHeader, appendSettleNote, renderReadWindow, sessionIdField} from './shared.js'
 
 export const pressKey = defineTool({
   name: 'terminal_press',
@@ -19,6 +19,7 @@ export const pressKey = defineTool({
       .string()
       .min(1)
       .describe('Key spec like "Enter", "Ctrl+C", "Shift+Tab", "ArrowUp", "F5", "Ctrl+Shift+ArrowLeft".'),
+    sessionId: sessionIdField,
     count: z
       .number()
       .int()
@@ -34,7 +35,8 @@ export const pressKey = defineTool({
     const idleMs = request.params.idleMs ?? 200
     const maxWaitMs = request.params.maxWaitMs ?? 5000
     const count = request.params.count ?? 1
-    const session = context.getSession()
+    const session = context.session()
+    appendSessionHeader(response, context, context.activeId())
     const result = await session.pressKey(request.params.key, count, {idleMs, maxWaitMs})
     response.appendLine(
       count === 1

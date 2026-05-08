@@ -3,7 +3,7 @@ import {z} from 'zod'
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSettleNote, renderReadWindow} from './shared.js'
+import {appendBufferState, appendSessionHeader, appendSettleNote, renderReadWindow, sessionIdField} from './shared.js'
 
 export const typeText = defineTool({
   name: 'terminal_type',
@@ -15,6 +15,7 @@ export const typeText = defineTool({
     'call `terminal_read` later.',
   schema: {
     text: z.string().describe('Characters to type. Embedded \\n becomes Enter.'),
+    sessionId: sessionIdField,
     idleMs: z
       .number()
       .int()
@@ -35,7 +36,8 @@ export const typeText = defineTool({
   handler: async (request, response, context) => {
     const idleMs = request.params.idleMs ?? 200
     const maxWaitMs = request.params.maxWaitMs ?? 5000
-    const session = context.getSession()
+    const session = context.session()
+    appendSessionHeader(response, context, context.activeId())
     const result = await session.writeText(request.params.text, {idleMs, maxWaitMs})
     response.appendLine(`Typed ${request.params.text.length} chars.`)
     appendSettleNote(response, result, maxWaitMs)

@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState} from './shared.js'
+import {appendBufferState, appendSessionHeader, sessionIdField} from './shared.js'
 
 export const resize = defineTool({
   name: 'terminal_resize',
@@ -10,6 +10,7 @@ export const resize = defineTool({
     'Change the terminal size. Both `cols` and `rows` are optional; omitting one preserves the current value. ' +
     'Resizes both the PTY and the emulator (so programs running inside see the change via SIGWINCH).',
   schema: {
+    sessionId: sessionIdField,
     cols: z
       .number()
       .int()
@@ -27,7 +28,8 @@ export const resize = defineTool({
   },
   annotations: {readOnlyHint: false},
   handler: async (request, response, context) => {
-    const session = context.getSession()
+    const session = context.session()
+    appendSessionHeader(response, context, context.activeId())
     const before = {cols: session.term.cols, rows: session.term.rows}
     const after = await session.resize(request.params.cols, request.params.rows)
     response.appendLine(

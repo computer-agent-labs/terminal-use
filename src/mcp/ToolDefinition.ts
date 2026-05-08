@@ -13,6 +13,15 @@ export interface ToolDefinition<Schema extends ZodRawShape = ZodRawShape> {
   description: string
   schema: Schema
   annotations?: ToolAnnotations
+  /**
+   * Whether this tool operates on an active terminal session. When true
+   * (default), the runtime calls `context.prepareForCall(sessionId)` before
+   * the handler so `context.session()` returns the resolved session and
+   * dead-shell auto-respawn is handled. Session-management tools
+   * (terminal_create, terminal_list, terminal_select, terminal_destroy)
+   * set this to false — they operate on the context, not on a session.
+   */
+  needsSession?: boolean
   handler: (
     request: {params: z.objectOutputType<Schema, z.ZodTypeAny>},
     response: McpResponse,

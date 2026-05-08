@@ -1,4 +1,4 @@
-import {TerminalSession, type ExitInfo, type SessionConfig} from '../session/TerminalSession.js'
+import {TerminalSession, type ExitInfo} from '../session/TerminalSession.js'
 
 export interface ContextDefaults {
   cols: number
@@ -14,8 +14,41 @@ export const DEFAULT_DEFAULTS: ContextDefaults = {
   scrollback: 5000
 }
 
+export interface CreateSessionOptions {
+  label?: string
+  cols?: number
+  rows?: number
+  scrollback?: number
+  shell?: string
+  cwd?: string
+}
+
+export interface SessionDescriptor {
+  sessionId: number
+  label?: string
+  pid: number
+  cols: number
+  rows: number
+  shell: string
+  cwd: string
+  isCurrent: boolean
+  isAlive: boolean
+  exitedAt?: Date
+  exitCode?: number
+  exitSignal?: number
+}
+
+export interface PrepareResult {
+  sessionId: number
+  respawned?: ExitInfo
+}
+
 export class McpContext {
-  #session: TerminalSession | undefined
+  #sessions = new Map<number, TerminalSession>()
+  #labels = new Map<number, string>()
+  #currentId: number | undefined
+  #nextId = 1
+  #activeForCall: number | undefined
   #defaults: ContextDefaults
 
   constructor(defaults: Partial<ContextDefaults> = {}) {
@@ -32,75 +65,169 @@ export class McpContext {
     return this.#defaults
   }
 
-  getSession(): TerminalSession {
-    if (!this.#session) {
-      this.#session = new TerminalSession({
-        cols: this.#defaults.cols,
-        rows: this.#defaults.rows,
-        scrollback: this.#defaults.scrollback,
-        shell: this.#defaults.shell,
-        cwd: this.#defaults.cwd
-      })
+  get currentId(): number | undefined {
+    return this.#currentId
+  }
+
+  /** The session bound to the in-flight tool call. Throws if not set. */
+  session(): TerminalSession {
+    if (this.#activeForCall === undefined) {
+      throw new Error('No active session for this call (call prepareForCall first).')
     }
-    return this.#session
+    const s = this.#sessions.get(this.#activeForCall)
+    if (!s) {
+      throw new Error(`Session ${this.#activeForCall} no longer exists.`)
+    }
+    return s
+  }
+
+  /** The session id bound to the in-flight tool call. */
+  activeId(): number {
+    if (this.#activeForCall === undefined) {
+      throw new Error('No active session for this call.')
+    }
+    return this.#activeForCall
+  }
+
+  labelOf(id: number): string | undefined {
+    return this.#labels.get(id)
   }
 
   /**
-   * Called once per tool invocation, before the handler runs. Lazy-creates
-   * the session, and if the previous shell has exited since the last call,
-   * disposes it and spawns a fresh one (returning the exit info so the
-   * handler can surface a notice to the agent and skip the action).
+   * Resolve the session for a tool call. If `sessionId` is given it must
+   * exist (else throws). If omitted, the current default is used; if there
+   * is no current default, one is lazy-created. If the resolved session has
+   * a dead shell, it is auto-respawned in place (preserving its sessionId)
+   * and the previous exit info is returned so the caller can surface a
+   * notice.
    */
-  async prepareForCall(): Promise<{respawned?: ExitInfo}> {
-    if (!this.#session) {
-      this.#session = new TerminalSession({
-        cols: this.#defaults.cols,
-        rows: this.#defaults.rows,
-        scrollback: this.#defaults.scrollback,
-        shell: this.#defaults.shell,
-        cwd: this.#defaults.cwd
-      })
-      return {}
+  async prepareForCall(sessionId?: number): Promise<PrepareResult> {
+    let id: number
+    if (sessionId !== undefined) {
+      if (!this.#sessions.has(sessionId)) {
+        throw new Error(
+          `Unknown sessionId ${sessionId}. Known: ${Array.from(this.#sessions.keys()).join(', ') || '(none)'}.`
+        )
+      }
+      id = sessionId
+    } else if (this.#currentId !== undefined && this.#sessions.has(this.#currentId)) {
+      id = this.#currentId
+    } else {
+      id = this.#allocId()
+      const s = this.#spawn({})
+      this.#sessions.set(id, s)
+      this.#currentId = id
+      this.#activeForCall = id
+      return {sessionId: id}
     }
-    if (this.#session.exited) {
-      const previousExit = this.#session.exited
-      this.#session.dispose()
-      this.#session = new TerminalSession({
-        cols: this.#defaults.cols,
-        rows: this.#defaults.rows,
-        scrollback: this.#defaults.scrollback,
-        shell: this.#defaults.shell,
-        cwd: this.#defaults.cwd
-      })
-      await this.#session.waitForReady()
-      return {respawned: previousExit}
+
+    const existing = this.#sessions.get(id)!
+    if (existing.exited) {
+      const previousExit = existing.exited
+      const oldLabel = this.#labels.get(id)
+      existing.dispose()
+      const fresh = this.#spawn({})
+      this.#sessions.set(id, fresh)
+      if (oldLabel) this.#labels.set(id, oldLabel)
+      await fresh.waitForReady()
+      this.#activeForCall = id
+      return {sessionId: id, respawned: previousExit}
     }
-    return {}
+
+    this.#activeForCall = id
+    return {sessionId: id}
   }
 
-  hasSession(): boolean {
-    return this.#session !== undefined
+  clearActiveCall(): void {
+    this.#activeForCall = undefined
   }
 
-  async hardReset(overrides: Partial<SessionConfig>): Promise<TerminalSession> {
-    if (!this.#session) {
-      this.#session = new TerminalSession({
-        cols: overrides.cols ?? this.#defaults.cols,
-        rows: overrides.rows ?? this.#defaults.rows,
-        shell: overrides.shell ?? this.#defaults.shell,
-        cwd: overrides.cwd ?? this.#defaults.cwd,
-        scrollback: this.#defaults.scrollback
-      })
-      return this.#session
+  createSession(opts: CreateSessionOptions): SessionDescriptor {
+    const id = this.#allocId()
+    const session = this.#spawn(opts)
+    this.#sessions.set(id, session)
+    if (opts.label) this.#labels.set(id, opts.label)
+    if (this.#currentId === undefined) this.#currentId = id
+    return this.#describe(id)
+  }
+
+  selectSession(id: number): SessionDescriptor {
+    if (!this.#sessions.has(id)) {
+      throw new Error(`Unknown sessionId ${id}.`)
     }
-    await this.#session.hardReset(overrides)
-    return this.#session
+    this.#currentId = id
+    return this.#describe(id)
+  }
+
+  destroySession(id: number): SessionDescriptor {
+    const s = this.#sessions.get(id)
+    if (!s) throw new Error(`Unknown sessionId ${id}.`)
+    const desc = this.#describe(id)
+    s.dispose()
+    this.#sessions.delete(id)
+    this.#labels.delete(id)
+    if (this.#currentId === id) {
+      // Pick any remaining session as the new current, or unset.
+      const next = this.#sessions.keys().next()
+      this.#currentId = next.done ? undefined : next.value
+    }
+    return desc
+  }
+
+  listSessions(): SessionDescriptor[] {
+    return Array.from(this.#sessions.keys()).map(id => this.#describe(id))
+  }
+
+  /** True if at least one session has ever been created. */
+  hasSessions(): boolean {
+    return this.#sessions.size > 0
   }
 
   dispose(): void {
-    if (this.#session) {
-      this.#session.dispose()
-      this.#session = undefined
+    for (const s of this.#sessions.values()) {
+      try {
+        s.dispose()
+      } catch {
+        // ignore
+      }
+    }
+    this.#sessions.clear()
+    this.#labels.clear()
+    this.#currentId = undefined
+    this.#activeForCall = undefined
+  }
+
+  #allocId(): number {
+    return this.#nextId++
+  }
+
+  #spawn(opts: CreateSessionOptions): TerminalSession {
+    return new TerminalSession({
+      cols: opts.cols ?? this.#defaults.cols,
+      rows: opts.rows ?? this.#defaults.rows,
+      scrollback: opts.scrollback ?? this.#defaults.scrollback,
+      shell: opts.shell ?? this.#defaults.shell,
+      cwd: opts.cwd ?? this.#defaults.cwd
+    })
+  }
+
+  #describe(id: number): SessionDescriptor {
+    const s = this.#sessions.get(id)
+    if (!s) throw new Error(`Unknown sessionId ${id}.`)
+    const exit = s.exited
+    return {
+      sessionId: id,
+      label: this.#labels.get(id),
+      pid: s.pty.pid,
+      cols: s.term.cols,
+      rows: s.term.rows,
+      shell: s.config.shell ?? '',
+      cwd: s.config.cwd ?? '',
+      isCurrent: this.#currentId === id,
+      isAlive: s.isAlive,
+      exitedAt: exit?.at,
+      exitCode: exit?.exitCode,
+      exitSignal: exit?.signal
     }
   }
 }

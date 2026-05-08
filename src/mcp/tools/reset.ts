@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState} from './shared.js'
+import {appendBufferState, appendSessionHeader, sessionIdField} from './shared.js'
 
 export const reset = defineTool({
   name: 'terminal_reset',
@@ -12,6 +12,7 @@ export const reset = defineTool({
     'and spawn a brand-new one — anything mid-execution gets killed. ' +
     'When `hardReset: true`, you can also override `cols`, `rows`, `shell`, and `cwd`.',
   schema: {
+    sessionId: sessionIdField,
     hardReset: z
       .boolean()
       .optional()
@@ -23,14 +24,15 @@ export const reset = defineTool({
   },
   annotations: {readOnlyHint: false},
   handler: async (request, response, context) => {
+    const session = context.session()
+    appendSessionHeader(response, context, context.activeId())
     if (request.params.hardReset) {
-      await context.hardReset({
+      await session.hardReset({
         cols: request.params.cols,
         rows: request.params.rows,
         shell: request.params.shell,
         cwd: request.params.cwd
       })
-      const session = context.getSession()
       response.appendLine(
         `Hard reset: spawned a fresh ${session.config.shell} (pid ${session.pty.pid}) ` +
           `at ${session.config.cwd}, ${session.term.cols}x${session.term.rows}.`
@@ -40,7 +42,6 @@ export const reset = defineTool({
       return
     }
 
-    const session = context.getSession()
     await session.softReset()
     response.appendLine(
       `Soft reset: buffer wiped, shell process (pid ${session.pty.pid}) preserved.`

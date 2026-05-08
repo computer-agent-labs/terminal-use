@@ -7,7 +7,7 @@ import {z} from 'zod'
 import {renderToPng} from '../../emulator/render.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState} from './shared.js'
+import {appendBufferState, appendSessionHeader, sessionIdField} from './shared.js'
 
 const INLINE_LIMIT_BYTES = 2 * 1024 * 1024
 
@@ -20,6 +20,7 @@ export const screenshot = defineTool({
     'If `filePath` is set, the PNG is written there and the path is returned. Large images ' +
     `(>${INLINE_LIMIT_BYTES} bytes) are also spilled to a temp file automatically.`,
   schema: {
+    sessionId: sessionIdField,
     page: z
       .number()
       .int()
@@ -35,7 +36,8 @@ export const screenshot = defineTool({
   },
   annotations: {readOnlyHint: true},
   handler: async (request, response, context) => {
-    const session = context.getSession()
+    const session = context.session()
+    appendSessionHeader(response, context, context.activeId())
     const page = request.params.page ?? 0
     const result = renderToPng(session.term, {page})
 

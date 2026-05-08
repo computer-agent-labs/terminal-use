@@ -9,3 +9,5 @@ coverage/
 
 # Reference implementation kept locally for inspiration only — not part of this project
 chrome-devtools-mcp/
+
+.claude/

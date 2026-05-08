@@ -20,15 +20,15 @@ const SIGNAL_NAMES: Record<number, string> = {
   15: 'SIGTERM'
 }
 
-function formatRespawnNotice(exit: ExitInfo): string {
+function formatRespawnNotice(exit: ExitInfo, sessionId: number): string {
   const parts = [`exit code ${exit.exitCode}`]
   if (exit.signal !== undefined) {
     parts.push(`signal ${SIGNAL_NAMES[exit.signal] ?? exit.signal}`)
   }
   return (
-    `The shell exited (${parts.join(', ')}) at ${exit.at.toISOString()} between ` +
-    'the last call and this one. A fresh shell has been spawned and is ready ' +
-    "for new commands — re-issue your command if it's still relevant."
+    `Session ${sessionId}'s shell exited (${parts.join(', ')}) at ${exit.at.toISOString()} between ` +
+    'the last call and this one. A fresh shell has been spawned (reusing the same sessionId) and is ' +
+    "ready for new commands — re-issue your command if it's still relevant."
   )
 }
 
@@ -54,11 +54,21 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
       const release = await mutex.acquire()
       const response = new McpResponse()
       try {
-        const prep = await context.prepareForCall()
-        if (prep.respawned) {
-          response.setError(formatRespawnNotice(prep.respawned))
-        } else {
+        if (tool.needsSession === false) {
           await tool.handler({params: params as never}, response, context)
+        } else {
+          const sessionId =
+            typeof params.sessionId === 'number' ? (params.sessionId as number) : undefined
+          const prep = await context.prepareForCall(sessionId)
+          if (prep.respawned) {
+            response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
+          } else {
+            try {
+              await tool.handler({params: params as never}, response, context)
+            } finally {
+              context.clearActiveCall()
+            }
+          }
         }
       } catch (err) {
         const message =
