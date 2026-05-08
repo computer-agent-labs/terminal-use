@@ -123,6 +123,13 @@ export class TerminalSession {
     this.#assertAlive()
     this.#term.reset()
     this.#term.clear()
+    // Nudge the shell to print a fresh prompt — without this, the cleared
+    // screen stays blank until the agent presses something, and they may
+    // assume the shell is dead. Submitting an empty line (`\r`) is the most
+    // portable trigger: bash/zsh/sh all redraw their prompt for it.
+    const settler = waitSettled(ptyAsSource(this.#pty), {idleMs: 200, maxWaitMs: 2000})
+    this.#pty.write('\r')
+    await settler
     await this.flush()
   }
 

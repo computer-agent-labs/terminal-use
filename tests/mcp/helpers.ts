@@ -9,15 +9,9 @@ export interface ServerHarness {
 }
 
 export async function startServer(): Promise<ServerHarness> {
-  // Pin to /bin/sh for deterministic prompts and output across machines.
-  // Tests that drive the server through MCP rely on shell behavior matching
-  // their assertions; the user's preferred zsh/bash with fancy prompts is
-  // exercised by the manual smoke script and live MCP run.
-  process.env.SHELL = '/bin/sh'
-  process.env.PS1 = '$ '
-  process.env.PROMPT_COMMAND = ''
-
-  const server = createMcpServer()
+  // Pin to /bin/sh for deterministic prompts across machines. The user's
+  // actual shell is exercised by the manual smoke script and the live MCP run.
+  const server = createMcpServer({defaults: {shell: '/bin/sh'}})
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   await server.connect(serverTransport)
 

@@ -41,7 +41,7 @@ export function renderReadWindow(response: McpResponse, win: ReadWindow): void {
     return
   }
   response.appendLine(
-    `Showing rows ${win.window.start}..${win.window.end} (page ${win.window.page} of ${win.window.totalPages - 1}, ` +
+    `Showing rows ${win.window.start}..${win.window.end} (page ${win.window.page + 1} of ${win.window.totalPages}, ` +
       `${win.window.rows} rows per page):`
   )
   response.appendLine('---')

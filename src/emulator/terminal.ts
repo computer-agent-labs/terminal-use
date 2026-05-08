@@ -1,6 +1,8 @@
 import xtermHeadless, {type Terminal} from '@xterm/headless'
 
-const {Terminal: TerminalClass} = xtermHeadless as unknown as {Terminal: new (options?: object) => Terminal}
+// `@xterm/headless` ships as a UMD bundle, so Node's ESM resolver doesn't
+// expose `Terminal` as a named export — we have to pull it off the default.
+const {Terminal: TerminalClass} = xtermHeadless as unknown as typeof import('@xterm/headless')
 
 export interface CreateTerminalOptions {
   cols: number

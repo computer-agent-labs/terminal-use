@@ -1,6 +1,12 @@
+import {readFile, stat, unlink} from 'node:fs/promises'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+
 import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 
 import {call, startServer, type ServerHarness} from './helpers.js'
+
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 let harness: ServerHarness
 
@@ -86,6 +92,22 @@ describe('MCP end-to-end', () => {
     if (pidMatch) {
       const pid = pidMatch[1] ?? pidMatch[2]
       expect(after.text).not.toContain(`pid ${pid}`)
+    }
+  })
+
+  it('screenshot with filePath writes a PNG to disk and inlines nothing', async () => {
+    const path = join(tmpdir(), `terminal-use-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`)
+    try {
+      const r = await call(harness.client, 'terminal_screenshot', {filePath: path})
+      expect(r.isError).toBe(false)
+      expect(r.text).toContain(`Saved to ${path}`)
+      expect(r.imageMimeTypes).toEqual([])
+      const info = await stat(path)
+      expect(info.size).toBeGreaterThan(64)
+      const head = await readFile(path)
+      expect(head.subarray(0, 8).equals(PNG_SIG)).toBe(true)
+    } finally {
+      await unlink(path).catch(() => undefined)
     }
   })
 

@@ -1,13 +1,17 @@
 import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js'
 import type {CallToolResult} from '@modelcontextprotocol/sdk/types.js'
 
-import {McpContext} from './mcp/McpContext.js'
+import {McpContext, type ContextDefaults} from './mcp/McpContext.js'
 import {McpResponse} from './mcp/McpResponse.js'
 import {Mutex} from './mcp/Mutex.js'
 import {TOOLS} from './mcp/tools/index.js'
 import {VERSION} from './version.js'
 
-export function createMcpServer(): McpServer {
+export interface CreateOptions {
+  defaults?: Partial<ContextDefaults>
+}
+
+export function createMcpServer(options: CreateOptions = {}): McpServer {
   const server = new McpServer(
     {
       name: 'terminal-use',
@@ -17,7 +21,7 @@ export function createMcpServer(): McpServer {
     {capabilities: {}}
   )
 
-  const context = new McpContext()
+  const context = new McpContext(options.defaults)
   const mutex = new Mutex()
 
   const registerOne = (tool: (typeof TOOLS)[number]) => {

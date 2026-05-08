@@ -4,6 +4,8 @@ export interface ContextDefaults {
   cols: number
   rows: number
   scrollback: number
+  shell?: string
+  cwd?: string
 }
 
 export const DEFAULT_DEFAULTS: ContextDefaults = {
@@ -16,8 +18,18 @@ export class McpContext {
   #session: TerminalSession | undefined
   #defaults: ContextDefaults
 
-  constructor(defaults: ContextDefaults = DEFAULT_DEFAULTS) {
-    this.#defaults = defaults
+  constructor(defaults: Partial<ContextDefaults> = {}) {
+    this.#defaults = {
+      cols: defaults.cols ?? DEFAULT_DEFAULTS.cols,
+      rows: defaults.rows ?? DEFAULT_DEFAULTS.rows,
+      scrollback: defaults.scrollback ?? DEFAULT_DEFAULTS.scrollback,
+      shell: defaults.shell,
+      cwd: defaults.cwd
+    }
+  }
+
+  get defaults(): Readonly<ContextDefaults> {
+    return this.#defaults
   }
 
   getSession(): TerminalSession {
@@ -25,7 +37,9 @@ export class McpContext {
       this.#session = new TerminalSession({
         cols: this.#defaults.cols,
         rows: this.#defaults.rows,
-        scrollback: this.#defaults.scrollback
+        scrollback: this.#defaults.scrollback,
+        shell: this.#defaults.shell,
+        cwd: this.#defaults.cwd
       })
     }
     return this.#session
@@ -40,8 +54,8 @@ export class McpContext {
       this.#session = new TerminalSession({
         cols: overrides.cols ?? this.#defaults.cols,
         rows: overrides.rows ?? this.#defaults.rows,
-        shell: overrides.shell,
-        cwd: overrides.cwd,
+        shell: overrides.shell ?? this.#defaults.shell,
+        cwd: overrides.cwd ?? this.#defaults.cwd,
         scrollback: this.#defaults.scrollback
       })
       return this.#session
