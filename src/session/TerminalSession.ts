@@ -155,9 +155,22 @@ export class TerminalSession {
 
   async flush(): Promise<void> {
     while (this.#pendingFlushes.length > 0) {
+      if (this.#disposed) {
+        // Term was disposed (e.g. via shell-exit handler). Its write
+        // callbacks may never fire — drop pending and return rather than
+        // hanging the caller.
+        this.#pendingFlushes = []
+        return
+      }
       const pending = this.#pendingFlushes
       this.#pendingFlushes = []
-      await Promise.all(pending)
+      // Defensive race: even if we were alive entering this iteration, the
+      // session can be disposed during the await. If that happens and the
+      // write callbacks never fire, a 500ms cap prevents an indefinite hang.
+      await Promise.race([
+        Promise.all(pending).then(() => undefined),
+        new Promise<void>(resolve => setTimeout(resolve, 500))
+      ])
     }
   }
 

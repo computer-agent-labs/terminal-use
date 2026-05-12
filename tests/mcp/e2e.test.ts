@@ -158,6 +158,22 @@ describe('MCP end-to-end', () => {
     expect(noMark.text).not.toMatch(/cursor marked with/)
   })
 
+  it('terminal_type returns gracefully when typed command exits the shell mid-settle', async () => {
+    const id = await createSession(harness.client, {label: 'will-exit'})
+    const r = await call(harness.client, 'terminal_type', {
+      sessionId: id,
+      text: 'exit\n',
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    // The typing succeeded; the shell exit during settle should produce a
+    // friendly message rather than a "TerminalSession has been disposed"
+    // exception.
+    expect(r.isError).toBe(false)
+    expect(r.text).toMatch(/shell exited during this call/i)
+    expect(r.text).not.toMatch(/has been disposed/)
+  })
+
   it('auto-respawns the shell when it has died between calls', async () => {
     const id = await createSession(harness.client, {label: 'will-die'})
     await call(harness.client, 'terminal_type', {

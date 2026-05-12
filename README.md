@@ -38,6 +38,14 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 | `terminal_list` | List live sessions and tombstoned ids. |
 | `terminal_destroy` | Kill a session and forget the id entirely. |
 
+### Renderer glyph coverage
+
+`terminal_screenshot` and `terminal_click`'s preview PNG use **JetBrains Mono Regular + Bold** as the only bundled fonts. That covers Latin, Greek, Cyrillic, ANSI box-drawing (`┌─┬─┐` etc.), and most general-purpose symbols — but **not** CJK (`你好`), **not** emoji (`🎉🚀`), and **not** Powerline / Nerd Font icons that live in the supplementary Private Use Area. Those cells render as the "tofu" missing-glyph box.
+
+The text path (`terminal_read`) is unaffected — it returns the exact codepoints from xterm-headless's buffer, faithfully including CJK and emoji. So when working with content that has non-Latin glyphs, prefer `terminal_read` over `terminal_screenshot` for ground truth, and use the screenshot to spot-check layout / colors / ANSI styling.
+
+Adding a fallback font (Noto Sans CJK ≈ 5MB per script, Noto Color Emoji ≈ 10MB) is doable but would meaningfully bloat the install; deferred for now.
+
 ### Click semantics
 
 - **Left-button only**, no modifiers, no right/middle/wheel (v1 scope).

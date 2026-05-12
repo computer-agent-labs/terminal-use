@@ -40,6 +40,19 @@ export const typeText = defineTool({
     const result = await session.writeText(request.params.text, {idleMs, maxWaitMs})
     response.appendLine(`Typed ${request.params.text.length} chars.`)
     appendSettleNote(response, result, maxWaitMs)
+    // The shell can exit during settle (e.g. agent typed `exit`). When that
+    // happens, McpContext's pty.onExit listener disposes the session
+    // synchronously, and any further access to session.state()/.read()
+    // would throw "TerminalSession has been disposed." Detect and exit
+    // gracefully — the next tool call against this id auto-respawns.
+    if (!session.isAlive) {
+      response.appendBlank()
+      response.appendLine(
+        'The shell exited during this call. The next tool call against this ' +
+          'sessionId will auto-respawn — re-issue your command if relevant.'
+      )
+      return
+    }
     response.appendBlank()
     appendBufferState(response, session.state())
     response.appendBlank()

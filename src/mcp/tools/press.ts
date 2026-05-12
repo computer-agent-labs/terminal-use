@@ -43,6 +43,16 @@ export const pressKey = defineTool({
         : `Pressed ${request.params.key} x ${count}.`
     )
     appendSettleNote(response, result, maxWaitMs)
+    // Same race as terminal_type — Ctrl+D or any key that ends the shell
+    // can dispose the session before we get to read its state.
+    if (!session.isAlive) {
+      response.appendBlank()
+      response.appendLine(
+        'The shell exited during this call. The next tool call against this ' +
+          'sessionId will auto-respawn — re-issue your command if relevant.'
+      )
+      return
+    }
     response.appendBlank()
     appendBufferState(response, session.state())
     response.appendBlank()

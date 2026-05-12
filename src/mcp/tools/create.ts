@@ -53,13 +53,18 @@ export const create = defineTool({
     response.appendLine(describeSessionLine(desc))
     response.appendBlank()
     response.appendLine(
-      `Attach (read/write, tmux-style): node ${BIN_PATH} attach ${desc.sessionId}`
+      'FOR THE HUMAN USER (not for you, the agent): if the user wants to look in on ' +
+        'this session or type into it from their own terminal alongside you, share this ' +
+        'command for them to run in their own terminal:'
     )
+    response.appendLine(`    node ${BIN_PATH} attach ${desc.sessionId}`)
     response.appendLine(
-      '  (Pass --resize to make the human\'s terminal size override the session\'s. ' +
-        'Detach with Ctrl+]. The socket lives at ' +
+      '(They press Ctrl+] to detach. They can pass --resize to make their terminal ' +
+        "size override the session's. The socket lives at " +
         context.socketPathFor(desc.sessionId) +
-        ' and survives across shell exits / auto-respawns.)'
+        ' and survives shell exits and auto-respawns. Do NOT run this command yourself — ' +
+        'you already drive this session through the terminal_* tools; the attach command ' +
+        'is a separate CLI for the human user.)'
     )
   }
 })
