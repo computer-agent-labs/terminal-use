@@ -4,6 +4,7 @@ import {join} from 'node:path'
 
 import {z} from 'zod'
 
+import {THEMES} from '../../emulator/palette.js'
 import {renderToPng} from '../../emulator/render.js'
 import {defineTool} from '../ToolDefinition.js'
 
@@ -38,7 +39,9 @@ export const screenshot = defineTool({
   handler: async (request, response, context) => {
     const session = context.session()
     const page = request.params.page ?? 0
-    const result = renderToPng(session.term, {page})
+    const themeName = context.themeOf(context.activeId())
+    const theme = themeName ? THEMES[themeName] : undefined
+    const result = renderToPng(session.term, {page, theme})
 
     appendBufferState(response, session.state())
     response.appendBlank()

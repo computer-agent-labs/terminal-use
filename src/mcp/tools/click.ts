@@ -4,6 +4,7 @@ import {join} from 'node:path'
 
 import {z} from 'zod'
 
+import {THEMES} from '../../emulator/palette.js'
 import {renderToPng} from '../../emulator/render.js'
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
@@ -84,7 +85,9 @@ export const click = defineTool({
       response.appendBlank()
       appendBufferState(response, session.state())
       response.appendBlank()
-      const result = renderToPng(session.term, {clickMarker: {col, row}})
+      const themeName = context.themeOf(context.activeId())
+      const theme = themeName ? THEMES[themeName] : undefined
+      const result = renderToPng(session.term, {clickMarker: {col, row}, theme})
       response.appendLine(
         `Rendered ${result.width}x${result.height} preview PNG (${result.buffer.length} bytes).`
       )

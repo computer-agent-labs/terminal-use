@@ -18,7 +18,7 @@ export const requiredSessionIdField = z
 export function describeSessionLine(d: SessionDescriptor): string {
   const tag = d.label ? `${d.sessionId} ("${d.label}")` : `${d.sessionId}`
   const idleSecs = Math.round((Date.now() - d.lastActivityAt.getTime()) / 1000)
-  return `[${tag}] ${d.cols}x${d.rows} pid=${d.pid} shell=${d.shell || '?'} cwd=${d.cwd || '?'} idle=${idleSecs}s`
+  return `[${tag}] ${d.cols}x${d.rows} pid=${d.pid} shell=${d.shell || '?'} cwd=${d.cwd || '?'} theme=${d.theme} idle=${idleSecs}s`
 }
 
 export function describeTombstoneLine(t: TombstoneDescriptor): string {

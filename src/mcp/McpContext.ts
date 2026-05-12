@@ -1,4 +1,5 @@
 import {AttachServer, socketPathFor} from '../attach/AttachServer.js'
+import {DEFAULT_THEME_NAME, type ThemeName} from '../emulator/palette.js'
 import {TerminalSession, type ExitInfo} from '../session/TerminalSession.js'
 
 export interface ContextDefaults {
@@ -43,6 +44,7 @@ export interface CreateSessionOptions {
   scrollback?: number
   shell?: string
   cwd?: string
+  theme?: ThemeName
 }
 
 export interface SessionDescriptor {
@@ -56,6 +58,7 @@ export interface SessionDescriptor {
   isAlive: boolean
   lastActivityAt: Date
   createdAt: Date
+  theme: ThemeName
 }
 
 export interface TombstoneDescriptor {
@@ -81,6 +84,7 @@ export interface PrepareResult {
 interface SessionRecord {
   session: TerminalSession
   label?: string
+  theme: ThemeName
   lastActivityAt: number
   createdAt: number
   unsubscribeExit: () => void
@@ -91,6 +95,7 @@ interface Tombstone {
   reason: 'shell-exit' | 'idle-killed' | 'evicted'
   at: number
   label?: string
+  theme: ThemeName
   exitInfo?: ExitInfo
 }
 
@@ -160,6 +165,10 @@ export class McpContext {
     return this.#sessions.get(id)?.label ?? this.#tombstones.get(id)?.label
   }
 
+  themeOf(id: number): ThemeName | undefined {
+    return this.#sessions.get(id)?.theme ?? this.#tombstones.get(id)?.theme
+  }
+
   /**
    * Resolve a session for a tool call. `sessionId` is required.
    *  - If a tombstone exists for that id (idle-killed, evicted, …) we
@@ -175,7 +184,7 @@ export class McpContext {
       this.#tombstones.delete(sessionId)
       this.#enforceCapForRevival()
       const session = this.#spawn({})
-      const rec = this.#buildRecord(sessionId, session, tomb.label)
+      const rec = this.#buildRecord(sessionId, session, tomb.label, tomb.theme)
       this.#sessions.set(sessionId, rec)
       await session.waitForReady()
       this.#activeForCall = sessionId
@@ -202,7 +211,7 @@ export class McpContext {
       rec.unsubscribeData()
       rec.session.dispose()
       const fresh = this.#spawn({})
-      const newRec = this.#buildRecord(sessionId, fresh, rec.label)
+      const newRec = this.#buildRecord(sessionId, fresh, rec.label, rec.theme)
       this.#sessions.set(sessionId, newRec)
       await fresh.waitForReady()
       this.#activeForCall = sessionId
@@ -221,7 +230,12 @@ export class McpContext {
    * dies and a new one is spawned in its place. Only fully destroyed when
    * terminal_destroy is called or the tombstone is GC'd.
    */
-  #buildRecord(sessionId: number, session: TerminalSession, label: string | undefined): SessionRecord {
+  #buildRecord(
+    sessionId: number,
+    session: TerminalSession,
+    label: string | undefined,
+    theme: ThemeName
+  ): SessionRecord {
     let attach = this.#attaches.get(sessionId)
     if (!attach) {
       attach = new AttachServer(this.socketPathFor(sessionId))
@@ -232,6 +246,7 @@ export class McpContext {
     const rec: SessionRecord = {
       session,
       label,
+      theme,
       lastActivityAt: this.#now(),
       createdAt: this.#now(),
       unsubscribeExit: () => undefined,
@@ -251,7 +266,7 @@ export class McpContext {
     }
     const id = this.#nextId++
     const session = this.#spawn(opts)
-    const rec = this.#buildRecord(id, session, opts.label)
+    const rec = this.#buildRecord(id, session, opts.label, opts.theme ?? DEFAULT_THEME_NAME)
     this.#sessions.set(id, rec)
     return this.#describe(id)
   }
@@ -274,7 +289,8 @@ export class McpContext {
           cwd: '',
           isAlive: false,
           lastActivityAt: new Date(tomb.at),
-          createdAt: new Date(tomb.at)
+          createdAt: new Date(tomb.at),
+          theme: tomb.theme
         }
       }
       throw new Error(`Unknown sessionId ${id}.`)
@@ -365,7 +381,8 @@ export class McpContext {
         this.#tombstones.set(id, {
           reason: 'idle-killed',
           at: now,
-          label: rec.label
+          label: rec.label,
+          theme: rec.theme
         })
         this.#attaches.get(id)?.setTarget(undefined)
       }
@@ -409,6 +426,7 @@ export class McpContext {
       reason: 'shell-exit',
       at: info.at.getTime(),
       label: rec.label,
+      theme: rec.theme,
       exitInfo: info
     })
     // Attach socket stays open — clients see output stop until the next
@@ -439,7 +457,8 @@ export class McpContext {
     this.#tombstones.set(oldestId, {
       reason: 'evicted',
       at: this.#now(),
-      label: rec.label
+      label: rec.label,
+      theme: rec.theme
     })
     this.#attaches.get(oldestId)?.setTarget(undefined)
   }
@@ -468,7 +487,8 @@ export class McpContext {
       cwd: rec.session.config.cwd ?? '',
       isAlive: rec.session.isAlive,
       lastActivityAt: new Date(rec.lastActivityAt),
-      createdAt: new Date(rec.createdAt)
+      createdAt: new Date(rec.createdAt),
+      theme: rec.theme
     }
   }
 }

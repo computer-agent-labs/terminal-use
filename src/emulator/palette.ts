@@ -29,6 +29,85 @@ export const DARK_PLUS: ThemeColors = {
   ]
 }
 
+export const LIGHT_PLUS: ThemeColors = {
+  background: '#ffffff',
+  foreground: '#333333',
+  cursor: '#333333',
+  ansi: [
+    '#000000',
+    '#cd3131',
+    '#00bc00',
+    '#949800',
+    '#0451a5',
+    '#bc05bc',
+    '#0598bc',
+    '#555555',
+    '#666666',
+    '#cd3131',
+    '#14ce14',
+    '#b5ba00',
+    '#0451a5',
+    '#bc05bc',
+    '#0598bc',
+    '#a5a5a5'
+  ]
+}
+
+// Standard Solarized palette per ethanschoonover.com/solarized.
+// base03..base0 (dark): bg + content tones. base2..base3 (light): inverse.
+const SOLARIZED_ACCENTS = {
+  yellow: '#b58900',
+  orange: '#cb4b16',
+  red: '#dc322f',
+  magenta: '#d33682',
+  violet: '#6c71c4',
+  blue: '#268bd2',
+  cyan: '#2aa198',
+  green: '#859900'
+}
+
+export const SOLARIZED_DARK: ThemeColors = {
+  background: '#002b36',
+  foreground: '#839496',
+  cursor: '#93a1a1',
+  ansi: [
+    '#073642',
+    SOLARIZED_ACCENTS.red,
+    SOLARIZED_ACCENTS.green,
+    SOLARIZED_ACCENTS.yellow,
+    SOLARIZED_ACCENTS.blue,
+    SOLARIZED_ACCENTS.magenta,
+    SOLARIZED_ACCENTS.cyan,
+    '#eee8d5',
+    '#002b36',
+    SOLARIZED_ACCENTS.orange,
+    '#586e75',
+    '#657b83',
+    '#839496',
+    SOLARIZED_ACCENTS.violet,
+    '#93a1a1',
+    '#fdf6e3'
+  ]
+}
+
+export const SOLARIZED_LIGHT: ThemeColors = {
+  background: '#fdf6e3',
+  foreground: '#657b83',
+  cursor: '#586e75',
+  ansi: SOLARIZED_DARK.ansi
+}
+
+export type ThemeName = 'dark' | 'light' | 'solarized-dark' | 'solarized-light'
+
+export const THEMES: Record<ThemeName, ThemeColors> = {
+  dark: DARK_PLUS,
+  light: LIGHT_PLUS,
+  'solarized-dark': SOLARIZED_DARK,
+  'solarized-light': SOLARIZED_LIGHT
+}
+
+export const DEFAULT_THEME_NAME: ThemeName = 'dark'
+
 const CUBE_LEVELS = [0, 95, 135, 175, 215, 255]
 
 function paletteIndexToHex(theme: ThemeColors, idx: number): string {

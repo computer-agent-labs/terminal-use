@@ -2,9 +2,12 @@ import {realpathSync} from 'node:fs'
 
 import {z} from 'zod'
 
+import {THEMES} from '../../emulator/palette.js'
 import {defineTool} from '../ToolDefinition.js'
 
 import {describeSessionLine} from './shared.js'
+
+const THEME_NAMES = Object.keys(THEMES) as Array<keyof typeof THEMES>
 
 // Resolve the bin path once at module load so we can quote it back to the
 // agent in every terminal_create response. `process.argv[1]` is the entry
@@ -36,7 +39,16 @@ export const create = defineTool({
     rows: z.number().int().min(1).max(1000).optional(),
     shell: z.string().optional().describe('Override the default shell (e.g. "/bin/zsh").'),
     cwd: z.string().optional().describe('Override the default working directory.'),
-    scrollback: z.number().int().min(100).max(50000).optional()
+    scrollback: z.number().int().min(100).max(50000).optional(),
+    theme: z
+      .enum(THEME_NAMES as [string, ...string[]])
+      .optional()
+      .describe(
+        'Color palette used by terminal_screenshot and terminal_click previews for THIS session. ' +
+          'Persists across auto-respawn / hardReset. Default "dark" (VS Code Dark+). Options: ' +
+          THEME_NAMES.map(n => `"${n}"`).join(', ') +
+          '.'
+      )
   },
   annotations: {readOnlyHint: false},
   needsSession: false,
@@ -47,7 +59,8 @@ export const create = defineTool({
       rows: request.params.rows,
       shell: request.params.shell,
       cwd: request.params.cwd,
-      scrollback: request.params.scrollback
+      scrollback: request.params.scrollback,
+      theme: request.params.theme as keyof typeof THEMES | undefined
     })
     response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)
     response.appendLine(describeSessionLine(desc))

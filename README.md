@@ -38,6 +38,19 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 | `terminal_list` | List live sessions and tombstoned ids. |
 | `terminal_destroy` | Kill a session and forget the id entirely. |
 
+### Themes
+
+`terminal_screenshot` and `terminal_click`'s preview PNG render using the session's theme. The theme is picked at `terminal_create` time via the `theme` arg, and persists across `terminal_reset({hardReset: true})` and auto-respawn:
+
+| theme name | description |
+|---|---|
+| `dark` *(default)* | VS Code Dark+ — dark background (`#1e1e1e`) with bright ANSI palette. |
+| `light` | VS Code Light+ — white background, dark text. |
+| `solarized-dark` | Ethan Schoonover's Solarized, dark variant. |
+| `solarized-light` | Solarized, light variant. |
+
+Pass e.g. `terminal_create({label: 'work', theme: 'solarized-dark'})`. `terminal_list` shows each session's theme in the descriptor line.
+
 ### Renderer glyph coverage
 
 `terminal_screenshot` and `terminal_click`'s preview PNG use **JetBrains Mono Regular + Bold** as the bundled fonts. That covers Latin, Greek, Cyrillic, ANSI box-drawing (`┌─┬─┐` etc.), and most general-purpose symbols.
