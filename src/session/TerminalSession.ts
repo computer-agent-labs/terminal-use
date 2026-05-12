@@ -35,6 +35,7 @@ export class TerminalSession {
   #disposed = false
   #exited: ExitInfo | undefined
   #exitListeners: Array<(info: ExitInfo) => void> = []
+  #dataListeners: Array<(chunk: string) => void> = []
 
   constructor(config: SessionConfig) {
     this.#config = {
@@ -65,6 +66,18 @@ export class TerminalSession {
       if (this.#pty !== myPty) return
       const flush = new Promise<void>(resolve => this.#term.write(chunk, () => resolve()))
       this.#pendingFlushes.push(flush)
+      // Fan out the raw PTY bytes to any extra subscribers (e.g. an
+      // AttachServer broadcasting to attached human clients). Same
+      // bytes that hit the emulator — order-of-arrival preserved.
+      if (this.#dataListeners.length > 0) {
+        for (const cb of [...this.#dataListeners]) {
+          try {
+            cb(chunk)
+          } catch {
+            // listener errors must not break the pty event loop
+          }
+        }
+      }
     })
     this.#term.onData(chunk => {
       if (this.#pty !== myPty) return
@@ -93,6 +106,14 @@ export class TerminalSession {
     return () => {
       const i = this.#exitListeners.indexOf(cb)
       if (i >= 0) this.#exitListeners.splice(i, 1)
+    }
+  }
+
+  onData(cb: (chunk: string) => void): () => void {
+    this.#dataListeners.push(cb)
+    return () => {
+      const i = this.#dataListeners.indexOf(cb)
+      if (i >= 0) this.#dataListeners.splice(i, 1)
     }
   }
 

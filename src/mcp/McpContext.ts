@@ -1,3 +1,4 @@
+import {AttachServer, socketPathFor} from '../attach/AttachServer.js'
 import {TerminalSession, type ExitInfo} from '../session/TerminalSession.js'
 
 export interface ContextDefaults {
@@ -31,6 +32,8 @@ export interface ContextOptions {
   sweepIntervalMs?: number
   /** Optional clock for tests. Default Date.now. */
   now?: () => number
+  /** PID baked into attach-socket paths. Default process.pid; tests can override for determinism. */
+  attachServerPid?: number
 }
 
 export interface CreateSessionOptions {
@@ -81,6 +84,7 @@ interface SessionRecord {
   lastActivityAt: number
   createdAt: number
   unsubscribeExit: () => void
+  unsubscribeData: () => void
 }
 
 interface Tombstone {
@@ -93,6 +97,7 @@ interface Tombstone {
 export class McpContext {
   #sessions = new Map<number, SessionRecord>()
   #tombstones = new Map<number, Tombstone>()
+  #attaches = new Map<number, AttachServer>()
   #nextId = 1
   #activeForCall: number | undefined
   #defaults: ContextDefaults
@@ -101,6 +106,7 @@ export class McpContext {
   #tombstoneRetentionMs: number
   #sweepInterval: NodeJS.Timeout | undefined
   #now: () => number
+  #attachServerPid: number
 
   constructor(options: ContextOptions = {}) {
     this.#defaults = {
@@ -114,12 +120,17 @@ export class McpContext {
     this.#idleKillMs = options.idleKillMs ?? DEFAULT_IDLE_KILL_MS
     this.#tombstoneRetentionMs = options.tombstoneRetentionMs ?? DEFAULT_TOMBSTONE_RETENTION_MS
     this.#now = options.now ?? Date.now
+    this.#attachServerPid = options.attachServerPid ?? process.pid
 
     const sweepIntervalMs = options.sweepIntervalMs ?? DEFAULT_SWEEP_INTERVAL_MS
     if (sweepIntervalMs > 0) {
       this.#sweepInterval = setInterval(() => this.sweep(), sweepIntervalMs)
       this.#sweepInterval.unref?.()
     }
+  }
+
+  socketPathFor(sessionId: number): string {
+    return socketPathFor(this.#attachServerPid, sessionId)
   }
 
   get defaults(): Readonly<ContextDefaults> {
@@ -164,14 +175,7 @@ export class McpContext {
       this.#tombstones.delete(sessionId)
       this.#enforceCapForRevival()
       const session = this.#spawn({})
-      const rec: SessionRecord = {
-        session,
-        label: tomb.label,
-        lastActivityAt: this.#now(),
-        createdAt: this.#now(),
-        unsubscribeExit: () => undefined
-      }
-      rec.unsubscribeExit = session.onExit(info => this.#handleSessionExit(sessionId, info))
+      const rec = this.#buildRecord(sessionId, session, tomb.label)
       this.#sessions.set(sessionId, rec)
       await session.waitForReady()
       this.#activeForCall = sessionId
@@ -195,16 +199,10 @@ export class McpContext {
     if (rec.session.exited) {
       const previousExit = rec.session.exited
       rec.unsubscribeExit()
+      rec.unsubscribeData()
       rec.session.dispose()
       const fresh = this.#spawn({})
-      const newRec: SessionRecord = {
-        session: fresh,
-        label: rec.label,
-        lastActivityAt: this.#now(),
-        createdAt: this.#now(),
-        unsubscribeExit: () => undefined
-      }
-      newRec.unsubscribeExit = fresh.onExit(info => this.#handleSessionExit(sessionId, info))
+      const newRec = this.#buildRecord(sessionId, fresh, rec.label)
       this.#sessions.set(sessionId, newRec)
       await fresh.waitForReady()
       this.#activeForCall = sessionId
@@ -214,6 +212,33 @@ export class McpContext {
     rec.lastActivityAt = this.#now()
     this.#activeForCall = sessionId
     return {sessionId}
+  }
+
+  /**
+   * Build a SessionRecord and wire it to its AttachServer. The AttachServer
+   * is created on first use (lazily) per sessionId, and survives across
+   * respawn — so an attached human keeps their connection when the shell
+   * dies and a new one is spawned in its place. Only fully destroyed when
+   * terminal_destroy is called or the tombstone is GC'd.
+   */
+  #buildRecord(sessionId: number, session: TerminalSession, label: string | undefined): SessionRecord {
+    let attach = this.#attaches.get(sessionId)
+    if (!attach) {
+      attach = new AttachServer(this.socketPathFor(sessionId))
+      this.#attaches.set(sessionId, attach)
+    }
+    attach.setTarget(session)
+    const unsubscribeData = session.onData(chunk => attach!.broadcast(chunk))
+    const rec: SessionRecord = {
+      session,
+      label,
+      lastActivityAt: this.#now(),
+      createdAt: this.#now(),
+      unsubscribeExit: () => undefined,
+      unsubscribeData
+    }
+    rec.unsubscribeExit = session.onExit(info => this.#handleSessionExit(sessionId, info))
+    return rec
   }
 
   clearActiveCall(): void {
@@ -226,14 +251,7 @@ export class McpContext {
     }
     const id = this.#nextId++
     const session = this.#spawn(opts)
-    const rec: SessionRecord = {
-      session,
-      label: opts.label,
-      lastActivityAt: this.#now(),
-      createdAt: this.#now(),
-      unsubscribeExit: () => undefined
-    }
-    rec.unsubscribeExit = session.onExit(info => this.#handleSessionExit(id, info))
+    const rec = this.#buildRecord(id, session, opts.label)
     this.#sessions.set(id, rec)
     return this.#describe(id)
   }
@@ -245,6 +263,7 @@ export class McpContext {
       const tomb = this.#tombstones.get(id)
       if (tomb) {
         this.#tombstones.delete(id)
+        this.#closeAttach(id)
         return {
           sessionId: id,
           label: tomb.label,
@@ -262,11 +281,25 @@ export class McpContext {
     }
     const desc = this.#describe(id)
     rec.unsubscribeExit()
+    rec.unsubscribeData()
     rec.session.dispose()
     this.#sessions.delete(id)
+    this.#closeAttach(id)
     // Explicit destroy: do NOT tombstone. The agent said "kill it"; future
     // calls against this id should error rather than auto-respawn.
     return desc
+  }
+
+  #closeAttach(id: number): void {
+    const attach = this.#attaches.get(id)
+    if (attach) {
+      try {
+        attach.close()
+      } catch {
+        // ignore
+      }
+      this.#attaches.delete(id)
+    }
   }
 
   listSessions(): SessionDescriptor[] {
@@ -293,14 +326,23 @@ export class McpContext {
   resetAll(): void {
     for (const rec of this.#sessions.values()) {
       rec.unsubscribeExit()
+      rec.unsubscribeData()
       try {
         rec.session.dispose()
       } catch {
         // ignore
       }
     }
+    for (const attach of this.#attaches.values()) {
+      try {
+        attach.close()
+      } catch {
+        // ignore
+      }
+    }
     this.#sessions.clear()
     this.#tombstones.clear()
+    this.#attaches.clear()
     this.#activeForCall = undefined
   }
 
@@ -313,6 +355,7 @@ export class McpContext {
     for (const [id, rec] of this.#sessions) {
       if (now - rec.lastActivityAt > this.#idleKillMs) {
         rec.unsubscribeExit()
+        rec.unsubscribeData()
         try {
           rec.session.dispose()
         } catch {
@@ -324,11 +367,13 @@ export class McpContext {
           at: now,
           label: rec.label
         })
+        this.#attaches.get(id)?.setTarget(undefined)
       }
     }
     for (const [id, t] of this.#tombstones) {
       if (now - t.at > this.#tombstoneRetentionMs) {
         this.#tombstones.delete(id)
+        this.#closeAttach(id)
       }
     }
   }
@@ -353,6 +398,7 @@ export class McpContext {
     const rec = this.#sessions.get(id)
     if (!rec) return
     rec.unsubscribeExit()
+    rec.unsubscribeData()
     try {
       rec.session.dispose()
     } catch {
@@ -365,6 +411,10 @@ export class McpContext {
       label: rec.label,
       exitInfo: info
     })
+    // Attach socket stays open — clients see output stop until the next
+    // tool call against this id triggers a respawn. Target gets nulled so
+    // any incoming bytes from attached clients are dropped.
+    this.#attaches.get(id)?.setTarget(undefined)
   }
 
   #evictOldest(): void {
@@ -379,6 +429,7 @@ export class McpContext {
     if (oldestId === undefined) return
     const rec = this.#sessions.get(oldestId)!
     rec.unsubscribeExit()
+    rec.unsubscribeData()
     try {
       rec.session.dispose()
     } catch {
@@ -390,6 +441,7 @@ export class McpContext {
       at: this.#now(),
       label: rec.label
     })
+    this.#attaches.get(oldestId)?.setTarget(undefined)
   }
 
   /**

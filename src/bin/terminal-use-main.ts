@@ -2,6 +2,7 @@ import {parseArgs} from 'node:util'
 
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 
+import {runAttachClient} from '../attach/client.js'
 import {createMcpServer, type CreateOptions} from '../index.js'
 
 function intArg(value: string | undefined, name: string): number | undefined {
@@ -19,9 +20,11 @@ function printUsage(): void {
     [
       'terminal-use - MCP server for driving a real PTY/TTY',
       '',
-      'Usage: terminal-use [options]',
+      'Usage:',
+      '  terminal-use [options]                    Run as an MCP server over stdio',
+      '  terminal-use attach <id> [--resize]       Attach to a running session',
       '',
-      'Options:',
+      'Server options:',
       '  --shell <path>      Shell to spawn (default: $SHELL or /bin/bash)',
       '  --cwd <path>        Working directory for the shell (default: process cwd)',
       '  --cols <n>          Initial columns (default: 120)',
@@ -32,8 +35,17 @@ function printUsage(): void {
   )
 }
 
+const argv = process.argv.slice(2)
+
+// Subcommand dispatch: `terminal-use attach <id>` runs the attach client; otherwise
+// we run as an MCP server with the usual flag set.
+if (argv[0] === 'attach') {
+  await runAttachClient(argv.slice(1))
+  process.exit(0)
+}
+
 const parsed = parseArgs({
-  args: process.argv.slice(2),
+  args: argv,
   options: {
     shell: {type: 'string'},
     cwd: {type: 'string'},

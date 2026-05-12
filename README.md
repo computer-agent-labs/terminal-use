@@ -48,6 +48,25 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 - **Known cosmetic limit**: when the target is in the rightmost ~10 columns, the coordinate label drawn next to the ring may clip off the canvas. The ring itself is always in frame, so trust it over the label.
 - **`idleMs` / `maxWaitMs` are accepted but ignored in preview mode** (preview never settles).
 
+### Attach (tmux-style human attach)
+
+You can attach to any live session from your own terminal and watch / type alongside the agent.
+
+`terminal_create` prints the attach command in its response — the agent can quote it back to you:
+
+```
+Attach (read/write, tmux-style): node /abs/path/terminal-use/build/src/bin/terminal-use.js attach 3
+```
+
+What it does:
+
+- Connects to a per-session Unix domain socket at `/tmp/terminal-use-<server-pid>-<sessionId>.sock` (mode 0600 — same Unix user only).
+- The PTY's output is broadcast to every attached client *and* the xterm-headless buffer the agent reads from. The agent and any attached humans are peers on the same PTY.
+- Multiple concurrent attaches are allowed (tmux-style). All clients see the same output; any client's typing reaches the shell.
+- Press **Ctrl+]** to detach.
+- Pass `--resize` to make the human's terminal size override the session's (and SIGWINCH-resize the session as the human resizes their window). Default is to leave the session size alone.
+- The socket survives across shell-exit / idle-kill / eviction — your connection stays open and you'll see new output as soon as the next tool call against this id triggers a respawn. The socket only goes away on `terminal_destroy` or after the 30-day tombstone retention expires.
+
 ### Lifecycle
 
 - **`sessionId` is required on every per-session tool.** There is no shared default. Two MCP clients (or two Claude Code sessions sharing one server) cannot accidentally talk to the same shell.

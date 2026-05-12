@@ -1,8 +1,22 @@
+import {realpathSync} from 'node:fs'
+
 import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
 import {describeSessionLine} from './shared.js'
+
+// Resolve the bin path once at module load so we can quote it back to the
+// agent in every terminal_create response. `process.argv[1]` is the entry
+// script we were invoked with (typically the absolute path passed to
+// `claude mcp add terminal-use -- node /abs/path/terminal-use.js`).
+const BIN_PATH = (() => {
+  try {
+    return realpathSync(process.argv[1] ?? '')
+  } catch {
+    return process.argv[1] ?? 'terminal-use'
+  }
+})()
 
 export const create = defineTool({
   name: 'terminal_create',
@@ -37,5 +51,15 @@ export const create = defineTool({
     })
     response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)
     response.appendLine(describeSessionLine(desc))
+    response.appendBlank()
+    response.appendLine(
+      `Attach (read/write, tmux-style): node ${BIN_PATH} attach ${desc.sessionId}`
+    )
+    response.appendLine(
+      '  (Pass --resize to make the human\'s terminal size override the session\'s. ' +
+        'Detach with Ctrl+]. The socket lives at ' +
+        context.socketPathFor(desc.sessionId) +
+        ' and survives across shell exits / auto-respawns.)'
+    )
   }
 })
