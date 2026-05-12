@@ -40,11 +40,13 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 
 ### Renderer glyph coverage
 
-`terminal_screenshot` and `terminal_click`'s preview PNG use **JetBrains Mono Regular + Bold** as the only bundled fonts. That covers Latin, Greek, Cyrillic, ANSI box-drawing (`┌─┬─┐` etc.), and most general-purpose symbols — but **not** CJK (`你好`), **not** emoji (`🎉🚀`), and **not** Powerline / Nerd Font icons that live in the supplementary Private Use Area. Those cells render as the "tofu" missing-glyph box.
+`terminal_screenshot` and `terminal_click`'s preview PNG use **JetBrains Mono Regular + Bold** as the bundled fonts. That covers Latin, Greek, Cyrillic, ANSI box-drawing (`┌─┬─┐` etc.), and most general-purpose symbols.
 
-The text path (`terminal_read`) is unaffected — it returns the exact codepoints from xterm-headless's buffer, faithfully including CJK and emoji. So when working with content that has non-Latin glyphs, prefer `terminal_read` over `terminal_screenshot` for ground truth, and use the screenshot to spot-check layout / colors / ANSI styling.
+**Emoji** are also covered on **macOS** — the renderer falls back to `/System/Library/Fonts/Apple Color Emoji.ttc` when JetBrains Mono lacks a glyph, so 🎉🚀✨🐢 render in full color. Linux/Docker doesn't have Apple's font and we don't bundle Noto Color Emoji (~10MB), so emoji cells render as tofu boxes there.
 
-Adding a fallback font (Noto Sans CJK ≈ 5MB per script, Noto Color Emoji ≈ 10MB) is doable but would meaningfully bloat the install; deferred for now.
+**CJK** (`你好`) and **Nerd Font / Powerline icons** that live in the supplementary Private Use Area render as tofu on every platform — we don't bundle Noto Sans CJK (~7MB per region) either.
+
+The text path (`terminal_read`) is unaffected — it returns the exact codepoints from xterm-headless's buffer, faithfully including everything. So when working with content that has tofu'd glyphs in the PNG, prefer `terminal_read` for ground truth and use the screenshot to spot-check layout / colors / ANSI styling.
 
 ### Click semantics
 

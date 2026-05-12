@@ -9,6 +9,15 @@ import {DARK_PLUS, resolveCellColors, type ThemeColors} from './palette.js'
 
 const FONT_FAMILY = 'JBMono'
 const FONT_FAMILY_BOLD = 'JBMonoBold'
+const EMOJI_FAMILY = 'AppleEmoji'
+
+// Apple Color Emoji is the only color-emoji font we can use without
+// shipping ~10MB of Noto in the package. macOS ships it at this stable
+// path; Linux/Docker won't have it, so the renderer just falls back to
+// JBMono there (emoji still render as the tofu missing-glyph box, but
+// terminal_read returns the real codepoints faithfully — see README).
+const APPLE_COLOR_EMOJI_PATH = '/System/Library/Fonts/Apple Color Emoji.ttc'
+let appleEmojiRegistered = false
 
 export interface RenderOptions {
   page?: number
@@ -61,7 +70,20 @@ function ensureFonts(): void {
     resolve(fontDir, 'JetBrainsMono-Bold.ttf'),
     FONT_FAMILY_BOLD
   )
+  if (process.platform === 'darwin' && existsSync(APPLE_COLOR_EMOJI_PATH)) {
+    try {
+      const key = GlobalFonts.registerFromPath(APPLE_COLOR_EMOJI_PATH, EMOJI_FAMILY)
+      appleEmojiRegistered = key !== null
+    } catch {
+      // System font may be locked down on some macOS configs — fall through
+      // and emoji will just render as tofu (matching non-darwin behavior).
+    }
+  }
   fontsRegistered = true
+}
+
+function fontStack(primary: string): string {
+  return appleEmojiRegistered ? `"${primary}", "${EMOJI_FAMILY}"` : `"${primary}"`
 }
 
 interface Metrics {
@@ -144,7 +166,10 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
       const isItalic = cell.isItalic() !== 0
       const family = isBold ? FONT_FAMILY_BOLD : FONT_FAMILY
       const style = isItalic ? 'italic ' : ''
-      ctx.font = `${style}${fontSize}px "${family}"`
+      // Append the emoji fallback so cells holding emoji codepoints (which
+      // JBMono lacks) get rendered via Apple Color Emoji on macOS. The
+      // fallback is a no-op on Linux/Docker — emoji cells stay tofu there.
+      ctx.font = `${style}${fontSize}px ${fontStack(family)}`
       ctx.fillStyle = colors.fg
       if (cell.isDim() !== 0) {
         ctx.globalAlpha = 0.6
