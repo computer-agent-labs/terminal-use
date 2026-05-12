@@ -166,15 +166,26 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
       const isItalic = cell.isItalic() !== 0
       const family = isBold ? FONT_FAMILY_BOLD : FONT_FAMILY
       const style = isItalic ? 'italic ' : ''
+      // Width-2 cells (emoji, eventually CJK) get drawn at 80% font size
+      // and centered horizontally in the 2-cell slot. Without this, an
+      // emoji whose em-square equals the 2-cell width visually butts up
+      // against the following character — real terminals get breathing
+      // room from the font's natural padding + their default downscaling
+      // of emoji vs. monospace text. We mimic that. Apple Color Emoji
+      // renders linearly with font size (width = fontSize at any size),
+      // so we can derive dx without a per-cell measureText() call.
+      const isWide = cellWidth >= 2
+      const glyphFontSize = isWide ? Math.round(fontSize * 0.8) : fontSize
+      const glyphDx = isWide ? Math.round((drawW - glyphFontSize) / 2) : 0
       // Append the emoji fallback so cells holding emoji codepoints (which
       // JBMono lacks) get rendered via Apple Color Emoji on macOS. The
       // fallback is a no-op on Linux/Docker — emoji cells stay tofu there.
-      ctx.font = `${style}${fontSize}px ${fontStack(family)}`
+      ctx.font = `${style}${glyphFontSize}px ${fontStack(family)}`
       ctx.fillStyle = colors.fg
       if (cell.isDim() !== 0) {
         ctx.globalAlpha = 0.6
       }
-      ctx.fillText(ch, x, yPx + metrics.baselineOffset)
+      ctx.fillText(ch, x + glyphDx, yPx + metrics.baselineOffset)
       ctx.globalAlpha = 1
 
       if (cell.isUnderline() !== 0) {
