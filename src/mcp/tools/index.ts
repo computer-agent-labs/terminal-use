@@ -1,5 +1,6 @@
 import type {ToolDefinition} from '../ToolDefinition.js'
 
+import {click} from './click.js'
 import {create} from './create.js'
 import {destroy} from './destroy.js'
 import {list} from './list.js'
@@ -11,6 +12,7 @@ import {screenshot} from './screenshot.js'
 import {typeText} from './type.js'
 
 export const TOOLS: ToolDefinition[] = [
+  click,
   create,
   destroy,
   list,

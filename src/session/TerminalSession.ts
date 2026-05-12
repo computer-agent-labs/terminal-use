@@ -4,6 +4,7 @@ import {windowMath, type Window} from '../emulator/pagination.js'
 import {ptyAsSource, waitSettled, type SettleOptions, type SettleResult} from '../emulator/settle.js'
 import {bufferState, createTerminal, type BufferState} from '../emulator/terminal.js'
 import {keyToBytes} from '../pty/keys.js'
+import {leftClickSequence} from '../pty/mouse.js'
 import {defaultShell, spawnPty, type IPty} from '../pty/spawn.js'
 
 export interface ExitInfo {
@@ -155,6 +156,25 @@ export class TerminalSession {
     const payload = count <= 1 ? sequence : sequence.repeat(count)
     const settler = waitSettled(ptyAsSource(this.#pty), settle)
     this.#pty.write(payload)
+    const result = await settler
+    await this.flush()
+    return result
+  }
+
+  /**
+   * Whether the program currently in the foreground has opted into mouse
+   * tracking (any non-'none' mode). Reflects the latest DECSET state seen
+   * by the emulator — set when the program prints `\x1b[?1000h` /
+   * `\x1b[?1002h` / etc., reset when it prints the matching DECRST.
+   */
+  isMouseModeEnabled(): boolean {
+    return this.#term.modes.mouseTrackingMode !== 'none'
+  }
+
+  async sendLeftClick(col: number, row: number, settle: SettleOptions): Promise<SettleResult> {
+    this.#assertAlive()
+    const settler = waitSettled(ptyAsSource(this.#pty), settle)
+    this.#pty.write(leftClickSequence(col, row))
     const result = await settler
     await this.flush()
     return result

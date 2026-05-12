@@ -16,6 +16,12 @@ export interface RenderOptions {
   padding?: number
   theme?: ThemeColors
   drawCursor?: boolean
+  /**
+   * If set, draw a bright magenta ring around the cell at this 1-indexed
+   * (col, row). Used by terminal_click's preview mode so the agent can
+   * visually confirm where a click would land before committing.
+   */
+  clickMarker?: {col: number; row: number}
 }
 
 export interface RenderResult {
@@ -170,9 +176,59 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
     }
   }
 
+  if (options.clickMarker) {
+    drawClickMarker(ctx, options.clickMarker, metrics, padding, cols, rows)
+  }
+
   return {
     buffer: canvas.toBuffer('image/png'),
     width,
     height
   }
+}
+
+function drawClickMarker(
+  ctx: ReturnType<ReturnType<typeof createCanvas>['getContext']>,
+  marker: {col: number; row: number},
+  metrics: Metrics,
+  padding: number,
+  cols: number,
+  rows: number
+): void {
+  // Coordinates from the agent are 1-indexed. Clamp to the visible viewport.
+  const col = Math.max(1, Math.min(cols, marker.col))
+  const row = Math.max(1, Math.min(rows, marker.row))
+  const cx = padding + (col - 0.5) * metrics.cellWidth
+  const cy = padding + (row - 0.5) * metrics.cellHeight
+  const radius = Math.max(metrics.cellWidth, metrics.cellHeight) * 1.4
+
+  // Outer dark halo so the ring stays visible on bright cells.
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = 6
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // Bright magenta ring.
+  ctx.strokeStyle = '#ff00ff'
+  ctx.lineWidth = 3
+  ctx.beginPath()
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
+  ctx.stroke()
+
+  // Small filled dot at the exact target cell center.
+  ctx.fillStyle = '#ff00ff'
+  ctx.fillRect(cx - 2, cy - 2, 4, 4)
+
+  // Coordinate label off to the side with a dark stroke for legibility.
+  const label = `(col ${col}, row ${row})`
+  ctx.font = `${Math.round(metrics.fontSize * 0.85)}px "JBMonoBold"`
+  ctx.textBaseline = 'alphabetic'
+  const labelX = cx + radius + 6
+  const labelY = cy - radius * 0.4
+  ctx.strokeStyle = '#000000'
+  ctx.lineWidth = 4
+  ctx.strokeText(label, labelX, labelY)
+  ctx.fillStyle = '#ff00ff'
+  ctx.fillText(label, labelX, labelY)
 }

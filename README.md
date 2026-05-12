@@ -28,6 +28,7 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 | `terminal_reset` | Wipe buffer; `hardReset: true` kills + respawns the shell. |
 | `terminal_read` | Read the buffer, paginated in screen-sized windows. Cursor marked inline by default. |
 | `terminal_screenshot` | PNG of the current screen (or any earlier screen-sized window via `page`). |
+| `terminal_click` | Left-click at a (col, row) cell. See *Click semantics* below. |
 
 ### Session management
 
@@ -36,6 +37,16 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 | `terminal_create` | Spawn a new session and return its numeric id; optional `label` for `terminal_list` display. |
 | `terminal_list` | List live sessions and tombstoned ids. |
 | `terminal_destroy` | Kill a session and forget the id entirely. |
+
+### Click semantics
+
+- **Left-button only**, no modifiers, no right/middle/wheel (v1 scope).
+- **Coordinates are 1-indexed**: `(col 1, row 1)` is the top-left cell of the live viewport, `(term.cols, term.rows)` is the bottom-right.
+- **`preview` defaults to `true`.** A preview call renders a PNG with a bright magenta ring + dark halo + center dot drawn at the target cell, plus a `(col N, row M)` coordinate label off to the side. *No click is sent.* The agent inspects the preview and then, if the target is right, repeats with `preview: false`.
+- **Execute mode requires the foreground program to have enabled mouse tracking.** Vim with `set mouse=a`, fzf, lazygit, less with `--mouse`, and most modern TUIs auto-enable it on startup. At a plain shell prompt, mouse mode is off and an execute call returns `isError: true` with an explanatory message rather than printing junk escape sequences as text.
+- **Wire-level encoding is SGR** (`CSI <0;col;row M` press, `m` release). Press + release are sent atomically.
+- **Known cosmetic limit**: when the target is in the rightmost ~10 columns, the coordinate label drawn next to the ring may clip off the canvas. The ring itself is always in frame, so trust it over the label.
+- **`idleMs` / `maxWaitMs` are accepted but ignored in preview mode** (preview never settles).
 
 ### Lifecycle
 
