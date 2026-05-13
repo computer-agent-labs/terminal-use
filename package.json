@@ -8,11 +8,12 @@
     "url": "git+ssh://git@github.com/computer-agent-labs/terminal-use.git"
   },
   "bin": {
-    "terminal-use": "./build/src/bin/terminal-use.js"
+    "terminal-use": "./bin/terminal-use.js"
   },
-  "main": "./build/src/index.js",
+  "main": "./src/index.ts",
   "files": [
-    "build/src",
+    "bin",
+    "src",
     "fonts",
     "README.md",
     "LICENSE"
@@ -39,6 +40,7 @@
     "@napi-rs/canvas": "^0.1.65",
     "@xterm/addon-serialize": "^0.13.0",
     "@xterm/headless": "^5.5.0",
+    "tsx": "^4.19.2",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -51,7 +53,6 @@
     "eslint-import-resolver-typescript": "^3.7.0",
     "eslint-plugin-import": "^2.31.0",
     "globals": "^15.13.0",
-    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vitest": "^2.1.8"

@@ -104,7 +104,7 @@ You need Node ≥ 20.19 and access to the [`computer-agent-labs/terminal-use`](h
 npm install -g --install-links=true git+ssh://git@github.com/computer-agent-labs/terminal-use.git
 ```
 
-That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux/Windows × arm/x64 — no toolchain required), and drops a `terminal-use` binary on your PATH.
+That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux/Windows × arm/x64 — no toolchain required), and drops a `terminal-use` binary on your PATH. There is no separate build step: the bin shim registers [`tsx`](https://github.com/privatenumber/tsx) on startup and runs the TypeScript sources directly. Startup cost is around 50 ms per process.
 
 (The `--install-links=true` flag forces npm to hard-copy the package into the global install location. Without it, npm symlinks into its cache, which gets cleaned up later and breaks the bin.)
 
@@ -132,9 +132,10 @@ Working on the code itself (cloned the repo directly)?
 
 ```bash
 yarn install
-yarn build
-claude mcp add terminal-use --scope user -- node "$PWD/build/src/bin/terminal-use.js"
+claude mcp add terminal-use --scope user -- node "$PWD/bin/terminal-use.js"
 ```
+
+No build step needed — the bin shim picks up tsx from `node_modules` and runs sources in-place. `yarn build` is still available for typecheck-then-emit if you want it, but the production install path no longer relies on `build/`.
 
 ## Develop
 
