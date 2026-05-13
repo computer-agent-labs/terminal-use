@@ -98,15 +98,40 @@ What it does:
 
 ## Install
 
+You need Node ≥ 20.19 and access to the [`computer-agent-labs/terminal-use`](https://github.com/computer-agent-labs/terminal-use) repo. Install globally from git in one shot:
+
+```bash
+npm install -g git+ssh://git@github.com/computer-agent-labs/terminal-use.git
+```
+
+That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux/Windows × arm/x64 — no toolchain required), runs `tsc` to build the server, and drops a `terminal-use` binary on your PATH.
+
+Then register with Claude Code:
+
+```bash
+claude mcp add terminal-use --scope user -- terminal-use
+```
+
+Verify:
+
+```bash
+claude mcp list
+```
+
+You should see `terminal-use` listed. Start a fresh Claude Code session and your agent will have `terminal_create`, `terminal_type`, `terminal_screenshot`, `terminal_click`, etc.
+
+To update, re-run the same install command — npm replaces the global install with the latest from `main`.
+
+To uninstall: `npm uninstall -g terminal-use` and `claude mcp remove terminal-use`.
+
+### Local development install
+
+Working on the code itself (cloned the repo directly)?
+
 ```bash
 yarn install
 yarn build
-```
-
-Then register with your MCP client:
-
-```bash
-claude mcp add terminal-use -- node /absolute/path/to/terminal-use/build/src/bin/terminal-use.js
+claude mcp add terminal-use --scope user -- node "$PWD/build/src/bin/terminal-use.js"
 ```
 
 ## Develop

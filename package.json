@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "description": "MCP server that lets AI agents drive a real PTY/TTY",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/computer-agent-labs/terminal-use.git"
+  },
   "bin": {
     "terminal-use": "./build/src/bin/terminal-use.js"
   },
