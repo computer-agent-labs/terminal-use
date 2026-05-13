@@ -20,6 +20,7 @@
   "scripts": {
     "clean": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
     "build": "yarn clean && tsc",
+    "prepare": "node ./node_modules/typescript/bin/tsc",
     "typecheck": "tsc --noEmit",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
