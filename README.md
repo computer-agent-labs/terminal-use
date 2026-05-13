@@ -101,10 +101,12 @@ What it does:
 You need Node ≥ 20.19 and access to the [`computer-agent-labs/terminal-use`](https://github.com/computer-agent-labs/terminal-use) repo. Install globally from git in one shot:
 
 ```bash
-npm install -g git+ssh://git@github.com/computer-agent-labs/terminal-use.git
+npm install -g --install-links=true git+ssh://git@github.com/computer-agent-labs/terminal-use.git
 ```
 
-That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux/Windows × arm/x64 — no toolchain required), runs `tsc` to build the server, and drops a `terminal-use` binary on your PATH.
+That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux/Windows × arm/x64 — no toolchain required), and drops a `terminal-use` binary on your PATH.
+
+(The `--install-links=true` flag forces npm to hard-copy the package into the global install location. Without it, npm symlinks into its cache, which gets cleaned up later and breaks the bin.)
 
 Then register with Claude Code:
 
