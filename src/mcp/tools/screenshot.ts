@@ -14,6 +14,7 @@ const INLINE_LIMIT_BYTES = 2 * 1024 * 1024
 
 export const screenshot = defineTool({
   name: 'terminal_screenshot',
+  title: 'Screenshot terminal',
   description:
     'Render a screen-sized window of the terminal to a PNG. Height is always the current ' +
     'screen height (`term.rows`); use `page` to walk back through scrollback in screen-sized ' +
@@ -35,7 +36,7 @@ export const screenshot = defineTool({
       .optional()
       .describe('Absolute path to write the PNG to. If unset, image is inlined as base64.')
   },
-  annotations: {readOnlyHint: true},
+  annotations: {readOnlyHint: true, openWorldHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
     const page = request.params.page ?? 0

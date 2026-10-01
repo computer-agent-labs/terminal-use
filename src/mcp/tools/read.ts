@@ -8,6 +8,7 @@ export const READ_MAX_ROWS = 1000
 
 export const read = defineTool({
   name: 'terminal_read',
+  title: 'Read terminal text',
   description:
     'Read a window of the terminal buffer. The buffer is the full xterm-emulated state ' +
     '(scrollback + visible viewport) in one contiguous index space. The window is paged from the ' +
@@ -44,7 +45,7 @@ export const read = defineTool({
           'Set to false if you need the unmodified text.'
       )
   },
-  annotations: {readOnlyHint: true},
+  annotations: {readOnlyHint: true, openWorldHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
     const rows = request.params.rows ?? session.term.rows

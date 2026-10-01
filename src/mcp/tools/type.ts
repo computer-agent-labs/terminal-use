@@ -13,6 +13,7 @@ import {
 
 export const typeText = defineTool({
   name: 'terminal_type',
+  title: 'Type into terminal',
   description:
     'Type literal characters into the terminal as if a human were pressing keys. ' +
     'Embedded `\\n` is normalized to `\\r` so `"git push\\n"` actually submits. ' +
@@ -38,7 +39,7 @@ export const typeText = defineTool({
         `Overall cap on the settle wait. Default 5000, clamped to ${HARD_CAP_MS}. Use terminal_wait for longer.`
       )
   },
-  annotations: {readOnlyHint: false},
+  annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true},
   handler: async (request, response, context) => {
     const idleMs = request.params.idleMs ?? 200
     const maxWaitMs = request.params.maxWaitMs ?? 5000

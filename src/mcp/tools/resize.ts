@@ -6,6 +6,7 @@ import {appendBufferState, requiredSessionIdField} from './shared.js'
 
 export const resize = defineTool({
   name: 'terminal_resize',
+  title: 'Resize terminal',
   description:
     'Change the terminal size. Both `cols` and `rows` are optional; omitting one preserves the current value. ' +
     'Resizes both the PTY and the emulator (so programs running inside see the change via SIGWINCH).',
@@ -26,7 +27,7 @@ export const resize = defineTool({
       .optional()
       .describe('New row count (1..1000). Omit to keep current rows.')
   },
-  annotations: {readOnlyHint: false},
+  annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
     const before = {cols: session.term.cols, rows: session.term.rows}

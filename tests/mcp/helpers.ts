@@ -1,32 +1,47 @@
-import {Client} from '@modelcontextprotocol/sdk/client/index.js'
-import {InMemoryTransport} from '@modelcontextprotocol/sdk/inMemory.js'
+import {Client, InMemoryTransport} from '@modelcontextprotocol/client'
+import {serveStdio} from '@modelcontextprotocol/server/stdio'
 
-import {createMcpServer, type CreateOptions} from '../../src/index.js'
+import {createTerminalUse, type CreateOptions} from '../../src/index.js'
+
+/**
+ * Which protocol era the test client speaks:
+ *  - 'legacy': the 2025 initialize handshake (what most clients still send).
+ *  - 'modern': the stateless 2026-07-28 revision, no handshake.
+ */
+export type Era = 'legacy' | 'modern'
 
 export interface ServerHarness {
   client: Client
   shutdown: () => Promise<void>
 }
 
-export async function startServer(extra: Omit<CreateOptions, 'defaults'> = {}): Promise<ServerHarness> {
+export async function startServer(
+  extra: Omit<CreateOptions, 'defaults'> = {},
+  era: Era = 'legacy'
+): Promise<ServerHarness> {
   // Pin to /bin/sh for deterministic prompts across machines. The user's
   // actual shell is exercised by the manual smoke script and the live MCP run.
-  const server = createMcpServer({
+  const terminalUse = createTerminalUse({
     defaults: {shell: '/bin/sh'},
     sweepIntervalMs: 0,
     ...extra
   })
+  // Same entry the real binary uses, over an in-memory pipe instead of stdio.
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  await server.connect(serverTransport)
+  const handle = serveStdio(terminalUse.buildServer, {transport: serverTransport})
 
-  const client = new Client({name: 'test-client', version: '1.0.0'}, {capabilities: {}})
+  const client = new Client(
+    {name: 'test-client', version: '1.0.0'},
+    {capabilities: {}, versionNegotiation: era === 'modern' ? {mode: {pin: '2026-07-28'}} : undefined}
+  )
   await client.connect(clientTransport)
 
   return {
     client,
     shutdown: async () => {
       await client.close()
-      await server.close()
+      await handle.close()
+      terminalUse.dispose()
     }
   }
 }

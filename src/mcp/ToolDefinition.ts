@@ -1,15 +1,24 @@
-import {z, type ZodRawShape} from 'zod'
+import type {z, ZodRawShape} from 'zod'
 
 import type {McpContext} from './McpContext.js'
 import type {McpResponse} from './McpResponse.js'
 
+/** MCP behavior hints. Clients use them to decide what needs confirmation. */
 export interface ToolAnnotations {
-  title?: string
+  /** The tool changes nothing. */
   readOnlyHint?: boolean
+  /** The tool may destroy or overwrite something (only meaningful when not read-only). */
+  destructiveHint?: boolean
+  /** Repeating the call with the same arguments has no further effect. */
+  idempotentHint?: boolean
+  /** The tool can reach beyond this machine (a shell can: network, ssh…). */
+  openWorldHint?: boolean
 }
 
 export interface ToolDefinition<Schema extends ZodRawShape = ZodRawShape> {
   name: string
+  /** Human-readable name for client UIs. */
+  title: string
   description: string
   schema: Schema
   annotations?: ToolAnnotations
@@ -24,9 +33,11 @@ export interface ToolDefinition<Schema extends ZodRawShape = ZodRawShape> {
   needsSession?: boolean
   handler: (
     request: {
-      params: z.objectOutputType<Schema, z.ZodTypeAny>
+      params: z.infer<z.ZodObject<Schema>>
       /** Aborts when the MCP client cancels the call. */
       signal?: AbortSignal
+      /** Report progress on a long call; present only if the client asked for it. */
+      progress?: (message: string) => void
     },
     response: McpResponse,
     context: McpContext

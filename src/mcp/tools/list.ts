@@ -4,13 +4,14 @@ import {describeSessionLine, describeTombstoneLine} from './shared.js'
 
 export const list = defineTool({
   name: 'terminal_list',
+  title: 'List terminal sessions',
   description:
     'List every active session and every tombstoned (recently-killed but reserved) sessionId. ' +
     'Tombstones are reservations: the shell is gone but the sessionId can still be called against — ' +
     'doing so respawns a fresh shell under the same id and surfaces the original termination reason ' +
     '(shell-exit, idle-killed, or evicted). Tombstones expire after 30 days; after that the id is gone.',
   schema: {},
-  annotations: {readOnlyHint: true},
+  annotations: {readOnlyHint: true, openWorldHint: false},
   needsSession: false,
   handler: async (_request, response, context) => {
     const sessions = context.listSessions()

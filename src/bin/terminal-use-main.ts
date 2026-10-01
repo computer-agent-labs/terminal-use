@@ -1,9 +1,9 @@
 import {parseArgs} from 'node:util'
 
-import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
+import {serveStdio} from '@modelcontextprotocol/server/stdio'
 
 import {runAttachClient} from '../attach/client.js'
-import {createTerminalUseServer, type CreateOptions} from '../index.js'
+import {createTerminalUse, type CreateOptions} from '../index.js'
 import {VERSION} from '../version.js'
 
 function intArg(value: string | undefined, name: string): number | undefined {
@@ -81,7 +81,7 @@ const opts: CreateOptions = {
   } as CreateOptions['defaults']
 }
 
-const {server, dispose} = createTerminalUseServer(opts)
+const {buildServer, dispose} = createTerminalUse(opts)
 
 // Leave nothing behind: kill the shells and unlink the attach sockets
 // whichever way we go down. A plain signal death skips 'exit' handlers, so
@@ -108,5 +108,9 @@ process.on('exit', () => {
   if (!shuttingDown) dispose()
 })
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+// serveStdio picks the protocol era from the client's opening message:
+// the stateless 2026-07-28 revision, or the 2025 initialize handshake for
+// clients that haven't moved yet. Either way the terminals are shared.
+serveStdio(buildServer, {
+  onerror: err => console.error(`[terminal-use] ${err.message}`)
+})

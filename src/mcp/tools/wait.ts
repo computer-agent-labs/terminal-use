@@ -15,6 +15,7 @@ const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, m
 
 export const wait = defineTool({
   name: 'terminal_wait',
+  title: 'Wait for terminal',
   description:
     'Block until the terminal reaches a state, instead of guessing with sleeps or polling `terminal_read`. ' +
     'Use it after `terminal_type` for anything that outlives the settle window: builds, installs, test runs, ' +
@@ -71,7 +72,7 @@ export const wait = defineTool({
           '(default 1000) it is the whole condition.'
       )
   },
-  annotations: {readOnlyHint: true},
+  annotations: {readOnlyHint: true, openWorldHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
     const timeoutMs = request.params.timeoutMs ?? 30000
@@ -138,6 +139,12 @@ export const wait = defineTool({
             break
           }
         }
+        request.progress?.(
+          regex
+            ? `Waiting for ${regex} (${Math.round((Date.now() - start) / 1000)}s)`
+            : `Waiting for ${until === 'quiet' ? 'output to go quiet' : 'the command to finish'} ` +
+              `(${Math.round((Date.now() - start) / 1000)}s)`
+        )
         const remaining = timeoutMs - (Date.now() - start)
         if (remaining <= 0) {
           outcome = 'timeout'

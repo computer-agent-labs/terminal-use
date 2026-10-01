@@ -13,6 +13,7 @@ import {
 
 export const pressKey = defineTool({
   name: 'terminal_press',
+  title: 'Press key in terminal',
   description:
     'Press a single named key or key combination. Examples of supported `key` values: ' +
     '`Enter`, `Tab`, `Escape`, `Backspace`, `Space`, `ArrowUp` / `ArrowDown` / `ArrowLeft` / `ArrowRight`, ' +
@@ -36,7 +37,7 @@ export const pressKey = defineTool({
     idleMs: z.number().int().min(0).max(HARD_CAP_MS).optional(),
     maxWaitMs: z.number().int().min(0).optional()
   },
-  annotations: {readOnlyHint: false},
+  annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true},
   handler: async (request, response, context) => {
     const idleMs = request.params.idleMs ?? 200
     const maxWaitMs = request.params.maxWaitMs ?? 5000

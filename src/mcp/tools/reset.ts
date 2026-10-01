@@ -6,6 +6,7 @@ import {appendBufferState, requiredSessionIdField} from './shared.js'
 
 export const reset = defineTool({
   name: 'terminal_reset',
+  title: 'Reset terminal',
   description:
     'Wipe the terminal buffer and scrollback. By default the shell process keeps running ' +
     '(env vars, cwd, history all preserved). Pass `hardReset: true` to kill the current shell ' +
@@ -22,7 +23,7 @@ export const reset = defineTool({
     shell: z.string().optional().describe('hardReset only: shell command (default $SHELL).'),
     cwd: z.string().optional().describe('hardReset only: working directory for the new shell.')
   },
-  annotations: {readOnlyHint: false},
+  annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false},
   handler: async (request, response, context) => {
     const session = context.session()
     if (request.params.hardReset) {

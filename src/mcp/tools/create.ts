@@ -27,6 +27,7 @@ function shellQuote(s: string): string {
 
 export const create = defineTool({
   name: 'terminal_create',
+  title: 'Create terminal session',
   description:
     'Spawn a new terminal session and return its sessionId. You must call this before any per-session ' +
     'tool — there is no shared default session. ' +
@@ -54,7 +55,7 @@ export const create = defineTool({
           '.'
       )
   },
-  annotations: {readOnlyHint: false},
+  annotations: {readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false},
   needsSession: false,
   handler: async (request, response, context) => {
     const desc = context.createSession({

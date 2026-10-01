@@ -17,7 +17,7 @@ describe('MCP error paths', () => {
     const id = await createSession(harness.client)
     const r = await call(harness.client, 'terminal_read', {sessionId: id, rows: 9999})
     expect(r.isError).toBe(true)
-    expect(r.text).toMatch(/less than or equal to 1000|too_big/i)
+    expect(r.text).toMatch(/rows: .*(<= ?1000|less than or equal to 1000)/i)
   })
 
   it('cols=0 in resize is rejected by schema validation', async () => {
