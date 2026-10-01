@@ -14,6 +14,17 @@ PNG snapshots — that way the agent sees exactly what a user would see
 (ANSI colors interpreted, alt-buffer switches honored, cursor where it
 actually is), not the raw byte stream.
 
+## Protocol
+
+Built on the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`). Over stdio it serves both protocol eras, chosen by the client's opening message:
+
+- **2026-07-28**, the stateless revision — no `initialize` handshake, no protocol-level session; every request is self-contained.
+- **2025-11-25 and earlier**, with the handshake, for clients that haven't moved yet.
+
+"Stateless" describes the protocol, not the terminals. The 2026 spec's rule is that a server needing state across calls hands out an explicit handle and takes it back as an ordinary tool argument — which is what `sessionId` already is. Sessions live in the server process, outside any one connection's protocol state, so nothing about them depends on the era.
+
+Also advertised: server `instructions` (how the tools fit together, read by the model before its first call), a `title` and behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on every tool, tools listed in a stable order, JSON Schema 2020-12 input schemas, request cancellation, and progress notifications from `terminal_wait` when the client supplies a progress token.
+
 ## Tools
 
 ### Per-session (act on a specific terminal)
