@@ -10,6 +10,7 @@ import {reset} from './reset.js'
 import {resize} from './resize.js'
 import {screenshot} from './screenshot.js'
 import {typeText} from './type.js'
+import {wait} from './wait.js'
 
 export const TOOLS: ToolDefinition[] = [
   click,
@@ -21,5 +22,6 @@ export const TOOLS: ToolDefinition[] = [
   reset,
   resize,
   screenshot,
-  typeText
+  typeText,
+  wait
 ].sort((a, b) => a.name.localeCompare(b.name)) as ToolDefinition[]
