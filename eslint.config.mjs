@@ -7,6 +7,7 @@ export default tseslint.config(
   {
     ignores: [
       'build/**',
+      'dist/**',
       'node_modules/**',
       'coverage/**',
       'fonts/**',

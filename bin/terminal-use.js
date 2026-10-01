@@ -1,13 +1,8 @@
 #!/usr/bin/env node
 
-// Bin shim: checks the Node version, registers tsx so the TS sources can be
-// imported directly, then re-enters into the real bin entrypoint. No build
-// step required — tsx transpiles every .ts file on the fly in-process.
-// ~50ms startup cost, ~3MB on-disk via the `tsx` dependency, in exchange
-// for never having to commit a build/ directory.
-//
-// The version check lives here, in plain JS with no static imports, so it
-// runs before anything that an old Node would fail to load.
+// Bin shim: checks the Node version, then hands over to the compiled
+// entrypoint in dist/. Kept as plain JS with no static imports so the check
+// runs before anything an old Node would fail to load.
 
 process.title = 'terminal-use'
 
@@ -20,8 +15,14 @@ if (major < 20 || (major === 20 && minor < 19) || (major === 22 && minor < 12)) 
   process.exit(1)
 }
 
-const {register} = await import('tsx/esm/api')
-
-register()
-
-await import('../src/bin/terminal-use-main.ts')
+try {
+  await import('../dist/bin/terminal-use-main.js')
+} catch (err) {
+  // Only the entrypoint itself being absent means "not built" — a missing
+  // module further down is a real error and must surface as one.
+  if (err?.code === 'ERR_MODULE_NOT_FOUND' && String(err.message).includes('terminal-use-main.js')) {
+    console.error('ERROR: terminal-use has not been built. Run `yarn build` in the repository first.')
+    process.exit(1)
+  }
+  throw err
+}

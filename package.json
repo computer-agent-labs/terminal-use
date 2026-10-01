@@ -4,28 +4,43 @@
   "description": "MCP server that lets AI agents drive a real PTY/TTY",
   "license": "MIT",
   "type": "module",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "terminal",
+    "pty",
+    "tty",
+    "tui",
+    "ai-agent",
+    "claude"
+  ],
+  "author": "Computer Agent Labs, Inc.",
+  "homepage": "https://github.com/computer-agent-labs/terminal-use#readme",
+  "bugs": {
+    "url": "https://github.com/computer-agent-labs/terminal-use/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/computer-agent-labs/terminal-use.git"
+    "url": "git+https://github.com/computer-agent-labs/terminal-use.git"
   },
   "bin": {
     "terminal-use": "./bin/terminal-use.js"
   },
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "files": [
     "bin",
-    "src",
+    "dist",
     "fonts",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "clean": "node -e \"require('fs').rmSync('build', {recursive: true, force: true})\"",
-    "build": "yarn clean && tsc",
-    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"for (const d of ['dist', 'build']) require('fs').rmSync(d, {recursive: true, force: true})\"",
+    "build": "yarn clean && tsc -p tsconfig.build.json",
+    "typecheck": "tsc",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
-    "start": "node bin/terminal-use.js",
+    "start": "yarn build && node bin/terminal-use.js",
     "dev": "tsx src/bin/terminal-use-main.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test": "vitest run",
@@ -33,7 +48,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:mcp": "vitest run tests/mcp",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage",
+    "prepack": "yarn build"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.12",
@@ -41,7 +57,6 @@
     "@napi-rs/canvas": "^0.1.65",
     "@xterm/addon-serialize": "^0.13.0",
     "@xterm/headless": "^5.5.0",
-    "tsx": "^4.19.2",
     "zod": "^4.2.0"
   },
   "devDependencies": {
@@ -55,11 +70,15 @@
     "eslint-import-resolver-typescript": "^3.7.0",
     "eslint-plugin-import": "^2.31.0",
     "globals": "^15.13.0",
+    "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.0",
     "vitest": "^2.1.8"
   },
   "engines": {
     "node": "^20.19.0 || ^22.12.0 || >=23"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
