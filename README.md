@@ -57,7 +57,9 @@ Pass e.g. `terminal_create({label: 'work', theme: 'solarized-dark'})`. `terminal
 
 **Emoji** are also covered on **macOS** — the renderer falls back to `/System/Library/Fonts/Apple Color Emoji.ttc` when JetBrains Mono lacks a glyph, so 🎉🚀✨🐢 render in full color. Linux/Docker doesn't have Apple's font and we don't bundle Noto Color Emoji (~10MB), so emoji cells render as tofu boxes there.
 
-**CJK** (`你好`) and **Nerd Font / Powerline icons** that live in the supplementary Private Use Area render as tofu on every platform — we don't bundle Noto Sans CJK (~7MB per region) either.
+**CJK** (`你好`), Japanese kana — including kaomoji such as `¯\_(ツ)_/¯` (the `ツ` is U+30C4) — and Hangul (`한글`) are also covered on **macOS** via fallbacks to system fonts (Hiragino Sans GB / PingFang for CJK, Apple SD Gothic Neo for Hangul). Linux/Docker has none of these and we don't bundle Noto Sans CJK (~7MB per region), so CJK cells render as tofu there.
+
+**Nerd Font / Powerline icons** that live in the supplementary Private Use Area render as tofu on every platform — we don't bundle a Nerd Font.
 
 The text path (`terminal_read`) is unaffected — it returns the exact codepoints from xterm-headless's buffer, faithfully including everything. So when working with content that has tofu'd glyphs in the PNG, prefer `terminal_read` for ground truth and use the screenshot to spot-check layout / colors / ANSI styling.
 
