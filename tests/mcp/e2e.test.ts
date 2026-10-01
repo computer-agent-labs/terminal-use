@@ -160,7 +160,7 @@ describe('MCP end-to-end', () => {
     expect(noMark.text).not.toMatch(/cursor marked with/)
   })
 
-  it('the cursor marker keeps the character under the cursor and shifts nothing', async () => {
+  it('the cursor marker goes in front of the character under the cursor, never over it', async () => {
     const id = await createSession(harness.client)
     await call(harness.client, 'terminal_type', {sessionId: id, text: 'abcdef', idleMs: 250, maxWaitMs: 3000})
     const r = await call(harness.client, 'terminal_press', {
@@ -170,9 +170,8 @@ describe('MCP end-to-end', () => {
       idleMs: 250,
       maxWaitMs: 3000
     })
-    expect(r.text).toContain('abcd\u0332ef')
-    expect(r.text).toContain('cursor is on the underlined "d"')
-    expect(r.text.replaceAll('\u0332', '')).toContain('abcdef')
+    expect(r.text).toContain('abc▌def')
+    expect(r.text).toContain('inserted in front of the "d" it is on')
   })
 
   it('finds the cursor by character, not by cell, after wide characters', async () => {
@@ -185,7 +184,7 @@ describe('MCP end-to-end', () => {
       idleMs: 250,
       maxWaitMs: 3000
     })
-    expect(r.text).toContain('你好 x\u0332yz')
+    expect(r.text).toContain('你好 ▌xyz')
   })
 
   it('omits the cursor marker and says so while the program has the cursor hidden', async () => {

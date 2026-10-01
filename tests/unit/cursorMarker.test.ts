@@ -3,13 +3,13 @@ import {describe, expect, it} from 'vitest'
 import {markCursor} from '../../src/mcp/tools/shared.js'
 
 describe('markCursor', () => {
-  it('underlines the character under the cursor, keeping it and every column', () => {
-    expect(markCursor('hello', {index: 1, length: 1})).toBe('he\u0332llo')
-    expect(markCursor('hello', {index: 0, length: 1})).toBe('h\u0332ello')
+  it('inserts in front of the character under the cursor, keeping it', () => {
+    expect(markCursor('hello', {index: 1, length: 1})).toBe('h▌ello')
+    expect(markCursor('hello', {index: 0, length: 1})).toBe('▌hello')
   })
 
-  it('underlines a multi-code-unit character as a whole', () => {
-    expect(markCursor('a🎉b', {index: 1, length: 2})).toBe('a🎉\u0332b')
+  it('never splits a multi-code-unit character', () => {
+    expect(markCursor('a🎉b', {index: 1, length: 2})).toBe('a▌🎉b')
   })
 
   it('puts the block marker in place of a blank cell inside the line', () => {

@@ -71,34 +71,30 @@ export function appendBufferState(response: McpResponse, state: BufferState): vo
 }
 
 export const CURSOR_MARKER = '▌'
-/** COMBINING LOW LINE: underlines the preceding character, zero width. */
-export const CURSOR_UNDERLINE = '\u0332'
 
 /**
- * Mark the cursor in `line` without moving or hiding anything:
- *  - on an empty cell, the block marker takes the place of the blank;
- *  - on a character, that character is kept and underlined with a
- *    zero-width combining mark.
- * Either way every other character stays in its column.
+ * Mark the cursor in `line`. Nothing is ever overwritten:
+ *  - on an empty cell, the marker takes the place of the blank;
+ *  - on a character, the marker is inserted in front of it. That pushes the
+ *    rest of that one line a column to the right — visibility of the cursor
+ *    is worth more to a reader of plain text than alignment on its row.
  */
 export function markCursor(line: string, cursor: CursorInText): string {
   const {index, length} = cursor
-  if (length > 0 && index < line.length) {
-    return line.slice(0, index + length) + CURSOR_UNDERLINE + line.slice(index + length)
-  }
   if (index >= line.length) return line + ' '.repeat(index - line.length) + CURSOR_MARKER
+  if (length > 0) return line.slice(0, index) + CURSOR_MARKER + line.slice(index)
   return line.slice(0, index) + CURSOR_MARKER + line.slice(index + 1)
 }
 
-/**
- * Plain text has no inverse video, so on top of the inline mark the header
- * names the character the cursor is on — that part can't be missed.
- */
+/** Says which character the marker sits in front of, so there is no doubt. */
 function describeCursor(win: ReadWindow): string {
   const line = win.text[win.state.cursorRow - win.window.start] ?? ''
   const {index, length} = win.cursor
   if (length === 0 || index >= line.length) return `cursor marked with "${CURSOR_MARKER}"`
-  return `cursor is on the underlined ${JSON.stringify(line.slice(index, index + length))}`
+  return (
+    `cursor marked with "${CURSOR_MARKER}", inserted in front of the ` +
+    `${JSON.stringify(line.slice(index, index + length))} it is on`
+  )
 }
 
 export function renderReadWindow(

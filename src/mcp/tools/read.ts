@@ -39,9 +39,10 @@ export const read = defineTool({
       .boolean()
       .optional()
       .describe(
-        'When true (default), mark the cursor inline: "▌" if it is on an empty cell, otherwise the ' +
-          'character it is on is underlined with a combining low line (U+0332). Nothing is hidden and ' +
-          'no column shifts. Skipped automatically while the program has the cursor hidden. ' +
+        'When true (default), mark the cursor inline with "▌". On an empty cell it takes the place of ' +
+          'the blank; on a character it is inserted in front of that character, which shifts the rest of ' +
+          'that one line right by a column. Nothing is overwritten. Skipped automatically while the ' +
+          'program has the cursor hidden. ' +
           'Set to false if you need the unmodified text.'
       )
   },
