@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.computer-agent-labs/terminal-use",
+  "description": "Lets AI agents drive a real terminal: type, press keys, click, read the screen, take screenshots.",
+  "repository": {
+    "url": "https://github.com/computer-agent-labs/terminal-use",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "terminal-use",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
