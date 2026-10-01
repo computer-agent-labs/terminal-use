@@ -63,7 +63,9 @@ export class TerminalSession {
   #pty!: IPty
   #term!: Terminal
   #config: SessionConfig
-  #pendingFlushes: Array<Promise<void>> = []
+  #pendingWrites = 0
+  #drainWaiters: Array<() => void> = []
+  #finalScreen: string[] | undefined
   #disposed = false
   #exited: ExitInfo | undefined
   #exitListeners: Array<(info: ExitInfo) => void> = []
@@ -94,10 +96,18 @@ export class TerminalSession {
       rows: this.#config.rows
     })
     const myPty = this.#pty
+    const myTerm = this.#term
     this.#pty.onData(chunk => {
       if (this.#pty !== myPty) return
-      const flush = new Promise<void>(resolve => this.#term.write(chunk, () => resolve()))
-      this.#pendingFlushes.push(flush)
+      // xterm parses asynchronously. Count outstanding writes rather than
+      // keeping a promise per chunk — a chatty process nobody is reading
+      // would otherwise grow that list without bound.
+      this.#pendingWrites++
+      myTerm.write(chunk, () => {
+        if (this.#term !== myTerm) return
+        this.#pendingWrites--
+        if (this.#pendingWrites === 0) this.#resolveDrainWaiters()
+      })
       // Fan out the raw PTY bytes to any extra subscribers (e.g. an
       // AttachServer broadcasting to attached human clients). Same
       // bytes that hit the emulator — order-of-arrival preserved.
@@ -121,7 +131,11 @@ export class TerminalSession {
       if (this.#pty !== myPty) return
       const info = {exitCode, signal, at: new Date()}
       this.#exited = info
-      if (!this.#disposed) {
+      const notify = () => {
+        if (this.#pty !== myPty || this.#disposed) return
+        // Listeners typically dispose us, so grab the last screen first —
+        // it's often the only clue to why the shell died.
+        this.#finalScreen = this.#captureScreen()
         for (const cb of [...this.#exitListeners]) {
           try {
             cb(info)
@@ -130,7 +144,37 @@ export class TerminalSession {
           }
         }
       }
+      // Let the emulator finish parsing the shell's last output before
+      // anyone snapshots or disposes it.
+      if (this.#pendingWrites === 0) notify()
+      else void this.flush().then(notify)
     })
+  }
+
+  #resolveDrainWaiters(): void {
+    const waiters = this.#drainWaiters
+    this.#drainWaiters = []
+    for (const resolve of waiters) resolve()
+  }
+
+  #captureScreen(): string[] {
+    const buf = this.#term.buffer.active
+    const lines: string[] = []
+    for (let y = buf.baseY; y < buf.baseY + this.#term.rows; y++) {
+      lines.push(buf.getLine(y)?.translateToString(true) ?? '')
+    }
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+    return lines
+  }
+
+  /**
+   * The screen as it looked when the shell exited. Available once the
+   * shell is gone, and kept after dispose().
+   */
+  get finalScreen(): string[] | undefined {
+    if (this.#finalScreen) return this.#finalScreen
+    if (this.#exited && !this.#disposed) return this.#captureScreen()
+    return undefined
   }
 
   onExit(cb: (info: ExitInfo) => void): () => void {
@@ -185,25 +229,21 @@ export class TerminalSession {
     await this.flush()
   }
 
+  /**
+   * Wait until the emulator has parsed every byte received from the pty so
+   * far. Capped: under a flood (or if the terminal is disposed mid-wait and
+   * its write callbacks never fire) we return rather than hang the caller.
+   */
   async flush(): Promise<void> {
-    while (this.#pendingFlushes.length > 0) {
-      if (this.#disposed) {
-        // Term was disposed (e.g. via shell-exit handler). Its write
-        // callbacks may never fire — drop pending and return rather than
-        // hanging the caller.
-        this.#pendingFlushes = []
-        return
-      }
-      const pending = this.#pendingFlushes
-      this.#pendingFlushes = []
-      // Defensive race: even if we were alive entering this iteration, the
-      // session can be disposed during the await. If that happens and the
-      // write callbacks never fire, a 500ms cap prevents an indefinite hang.
-      await Promise.race([
-        Promise.all(pending).then(() => undefined),
-        new Promise<void>(resolve => setTimeout(resolve, 500))
-      ])
-    }
+    if (this.#disposed || this.#pendingWrites === 0) return
+    let timer: NodeJS.Timeout | undefined
+    await Promise.race([
+      new Promise<void>(resolve => this.#drainWaiters.push(resolve)),
+      new Promise<void>(resolve => {
+        timer = setTimeout(resolve, FLUSH_CAP_MS)
+      })
+    ])
+    clearTimeout(timer)
   }
 
   async writeText(text: string, settle: SettleOptions): Promise<SettleResult> {
@@ -263,6 +303,7 @@ export class TerminalSession {
     this.#assertAlive()
     this.#term.reset()
     this.#term.clear()
+    resetTrackedModes(this.#term)
     // Nudge the shell to print a fresh prompt — without this, the cleared
     // screen stays blank until the agent presses something, and they may
     // assume the shell is dead. Submitting an empty line (`\r`) is the most
@@ -284,7 +325,9 @@ export class TerminalSession {
       shell: overrides.shell ?? this.#config.shell,
       cwd: overrides.cwd ?? this.#config.cwd
     }
-    this.#pendingFlushes = []
+    this.#pendingWrites = 0
+    this.#resolveDrainWaiters()
+    this.#finalScreen = undefined
     this.#spawn()
     try {
       oldPty.kill()

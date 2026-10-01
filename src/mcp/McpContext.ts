@@ -1,6 +1,8 @@
+import {AsyncLocalStorage} from 'node:async_hooks'
+
 import {AttachServer, socketPathFor} from '../attach/AttachServer.js'
 import {DEFAULT_THEME_NAME, type ThemeName} from '../emulator/palette.js'
-import {TerminalSession, type ExitInfo} from '../session/TerminalSession.js'
+import {TerminalSession, type ExitInfo, type SessionConfig} from '../session/TerminalSession.js'
 
 export interface ContextDefaults {
   cols: number
@@ -72,7 +74,7 @@ export interface TombstoneDescriptor {
 }
 
 export type RespawnReason =
-  | {kind: 'shell-exit'; exit: ExitInfo; label?: string}
+  | {kind: 'shell-exit'; exit: ExitInfo; label?: string; finalScreen?: string[]}
   | {kind: 'idle-killed'; at: Date; label?: string}
   | {kind: 'evicted'; at: Date; label?: string}
 
@@ -96,7 +98,10 @@ interface Tombstone {
   at: number
   label?: string
   theme: ThemeName
+  /** Size, shell, cwd and scrollback the session had, so a respawn matches it. */
+  config: SessionConfig
   exitInfo?: ExitInfo
+  finalScreen?: string[]
 }
 
 export class McpContext {
@@ -104,7 +109,9 @@ export class McpContext {
   #tombstones = new Map<number, Tombstone>()
   #attaches = new Map<number, AttachServer>()
   #nextId = 1
-  #activeForCall: number | undefined
+  // The session a tool call is bound to travels with that call's async
+  // context, so calls against different sessions can overlap safely.
+  #activeCall = new AsyncLocalStorage<number>()
   #defaults: ContextDefaults
   #maxSessions: number
   #idleKillMs: number
@@ -142,23 +149,26 @@ export class McpContext {
     return this.#defaults
   }
 
+  /** Run `fn` with `sessionId` as the session bound to this tool call. */
+  runWithSession<T>(sessionId: number, fn: () => Promise<T>): Promise<T> {
+    return this.#activeCall.run(sessionId, fn)
+  }
+
   /** The session bound to the in-flight tool call. Throws if not set. */
   session(): TerminalSession {
-    if (this.#activeForCall === undefined) {
-      throw new Error('No active session for this call (call prepareForCall first).')
-    }
-    const rec = this.#sessions.get(this.#activeForCall)
+    const rec = this.#sessions.get(this.activeId())
     if (!rec) {
-      throw new Error(`Session ${this.#activeForCall} no longer exists.`)
+      throw new Error(`Session ${this.activeId()} no longer exists.`)
     }
     return rec.session
   }
 
   activeId(): number {
-    if (this.#activeForCall === undefined) {
-      throw new Error('No active session for this call.')
+    const id = this.#activeCall.getStore()
+    if (id === undefined) {
+      throw new Error('No active session for this call (use runWithSession).')
     }
-    return this.#activeForCall
+    return id
   }
 
   labelOf(id: number): string | undefined {
@@ -183,14 +193,13 @@ export class McpContext {
     if (tomb) {
       this.#tombstones.delete(sessionId)
       this.#enforceCapForRevival()
-      const session = this.#spawn({})
+      const session = this.#spawn(tomb.config)
       const rec = this.#buildRecord(sessionId, session, tomb.label, tomb.theme)
       this.#sessions.set(sessionId, rec)
       await session.waitForReady()
-      this.#activeForCall = sessionId
       const respawned: RespawnReason =
         tomb.reason === 'shell-exit' && tomb.exitInfo
-          ? {kind: 'shell-exit', exit: tomb.exitInfo, label: tomb.label}
+          ? {kind: 'shell-exit', exit: tomb.exitInfo, label: tomb.label, finalScreen: tomb.finalScreen}
           : tomb.reason === 'idle-killed'
             ? {kind: 'idle-killed', at: new Date(tomb.at), label: tomb.label}
             : {kind: 'evicted', at: new Date(tomb.at), label: tomb.label}
@@ -205,21 +214,26 @@ export class McpContext {
       )
     }
 
+    // The shell is gone but its exit hasn't been turned into a tombstone
+    // yet (the session holds exit listeners back until the emulator has
+    // parsed the last output). Respawn in place.
     if (rec.session.exited) {
       const previousExit = rec.session.exited
+      const finalScreen = rec.session.finalScreen
       rec.unsubscribeExit()
       rec.unsubscribeData()
       rec.session.dispose()
-      const fresh = this.#spawn({})
+      const fresh = this.#spawn(rec.session.config)
       const newRec = this.#buildRecord(sessionId, fresh, rec.label, rec.theme)
       this.#sessions.set(sessionId, newRec)
       await fresh.waitForReady()
-      this.#activeForCall = sessionId
-      return {sessionId, respawned: {kind: 'shell-exit', exit: previousExit, label: rec.label}}
+      return {
+        sessionId,
+        respawned: {kind: 'shell-exit', exit: previousExit, label: rec.label, finalScreen}
+      }
     }
 
     rec.lastActivityAt = this.#now()
-    this.#activeForCall = sessionId
     return {sessionId}
   }
 
@@ -242,7 +256,6 @@ export class McpContext {
       this.#attaches.set(sessionId, attach)
     }
     attach.setTarget(session)
-    const unsubscribeData = session.onData(chunk => attach!.broadcast(chunk))
     const rec: SessionRecord = {
       session,
       label,
@@ -250,14 +263,16 @@ export class McpContext {
       lastActivityAt: this.#now(),
       createdAt: this.#now(),
       unsubscribeExit: () => undefined,
-      unsubscribeData
+      unsubscribeData: () => undefined
     }
+    rec.unsubscribeData = session.onData(chunk => {
+      // Output counts as activity: a dev server or long build the agent
+      // left running (or one a human is driving over attach) is not idle.
+      rec.lastActivityAt = this.#now()
+      attach!.broadcast(chunk)
+    })
     rec.unsubscribeExit = session.onExit(info => this.#handleSessionExit(sessionId, info))
     return rec
-  }
-
-  clearActiveCall(): void {
-    this.#activeForCall = undefined
   }
 
   createSession(opts: CreateSessionOptions): SessionDescriptor {
@@ -334,6 +349,11 @@ export class McpContext {
     }))
   }
 
+  /** Whether `id` is a live session or a tombstone. */
+  knows(id: number): boolean {
+    return this.#sessions.has(id) || this.#tombstones.has(id)
+  }
+
   hasSessions(): boolean {
     return this.#sessions.size > 0
   }
@@ -359,7 +379,6 @@ export class McpContext {
     this.#sessions.clear()
     this.#tombstones.clear()
     this.#attaches.clear()
-    this.#activeForCall = undefined
   }
 
   /**
@@ -382,7 +401,8 @@ export class McpContext {
           reason: 'idle-killed',
           at: now,
           label: rec.label,
-          theme: rec.theme
+          theme: rec.theme,
+          config: rec.session.config
         })
         this.#attaches.get(id)?.setTarget(undefined)
       }
@@ -401,7 +421,7 @@ export class McpContext {
     this.resetAll()
   }
 
-  #spawn(opts: CreateSessionOptions): TerminalSession {
+  #spawn(opts: Partial<SessionConfig>): TerminalSession {
     return new TerminalSession({
       cols: opts.cols ?? this.#defaults.cols,
       rows: opts.rows ?? this.#defaults.rows,
@@ -413,7 +433,7 @@ export class McpContext {
 
   #handleSessionExit(id: number, info: ExitInfo): void {
     const rec = this.#sessions.get(id)
-    if (!rec) return
+    if (!rec || rec.session.exited !== info) return
     rec.unsubscribeExit()
     rec.unsubscribeData()
     try {
@@ -427,7 +447,9 @@ export class McpContext {
       at: info.at.getTime(),
       label: rec.label,
       theme: rec.theme,
-      exitInfo: info
+      config: rec.session.config,
+      exitInfo: info,
+      finalScreen: rec.session.finalScreen
     })
     // Attach socket stays open — clients see output stop until the next
     // tool call against this id triggers a respawn. Target gets nulled so
@@ -458,7 +480,8 @@ export class McpContext {
       reason: 'evicted',
       at: this.#now(),
       label: rec.label,
-      theme: rec.theme
+      theme: rec.theme,
+      config: rec.session.config
     })
     this.#attaches.get(oldestId)?.setTarget(undefined)
   }

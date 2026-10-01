@@ -7,12 +7,14 @@ export interface SettleOptions {
   maxWaitMs: number
 }
 
-export type SettleOutcome = 'settled' | 'timeout' | 'deferred'
+export type SettleOutcome = 'settled' | 'timeout'
 
 export interface SettleResult {
   outcome: SettleOutcome
   elapsedMs: number
   bytesObserved: number
+  /** True when the caller asked for more than HARD_CAP_MS and we clamped. */
+  capped: boolean
 }
 
 export interface SettleSource {
@@ -29,10 +31,10 @@ export function ptyAsSource(pty: IPty): SettleSource {
 
 export function waitSettled(source: SettleSource, options: SettleOptions): Promise<SettleResult> {
   const start = Date.now()
-
-  if (options.maxWaitMs > HARD_CAP_MS) {
-    return Promise.resolve({outcome: 'deferred', elapsedMs: 0, bytesObserved: 0})
-  }
+  // type/press/click hold a tool call open, so they never wait longer than
+  // the cap. Anything slower belongs in terminal_wait.
+  const capped = options.maxWaitMs > HARD_CAP_MS
+  const maxWaitMs = Math.min(options.maxWaitMs, HARD_CAP_MS)
 
   return new Promise<SettleResult>(resolve => {
     let bytes = 0
@@ -48,10 +50,10 @@ export function waitSettled(source: SettleSource, options: SettleOptions): Promi
 
     const finish = (outcome: SettleOutcome) => {
       cleanup()
-      resolve({outcome, elapsedMs: Date.now() - start, bytesObserved: bytes})
+      resolve({outcome, elapsedMs: Date.now() - start, bytesObserved: bytes, capped})
     }
 
-    const noActivityMs = Math.min(options.maxWaitMs, Math.max(options.idleMs * 4, 1000))
+    const noActivityMs = Math.min(maxWaitMs, Math.max(options.idleMs * 4, 1000))
 
     const disposable = source.onData(chunk => {
       bytes += chunk.length
@@ -61,6 +63,6 @@ export function waitSettled(source: SettleSource, options: SettleOptions): Promi
     })
 
     idleTimer = setTimeout(() => finish('settled'), noActivityMs)
-    maxTimer = setTimeout(() => finish(firstArrived ? 'timeout' : 'settled'), options.maxWaitMs)
+    maxTimer = setTimeout(() => finish(firstArrived ? 'timeout' : 'settled'), maxWaitMs)
   })
 }

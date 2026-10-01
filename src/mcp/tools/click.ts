@@ -122,7 +122,7 @@ export const click = defineTool({
 
     const result = await session.sendLeftClick(col, row, {idleMs, maxWaitMs})
     response.appendLine(`Clicked at (col ${col}, row ${row}).`)
-    appendSettleNote(response, result, maxWaitMs)
+    appendSettleNote(response, result)
     response.appendBlank()
     appendBufferState(response, session.state())
     response.appendBlank()

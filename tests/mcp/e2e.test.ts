@@ -97,15 +97,16 @@ describe('MCP end-to-end', () => {
     expect(r.imageMimeTypes).toEqual(['image/png'])
   })
 
-  it('maxWaitMs > 10000 triggers immediate deferred return', async () => {
+  it('maxWaitMs > 10000 is clamped, and the output is still waited for', async () => {
     const id = await createSession(harness.client)
     const r = await call(harness.client, 'terminal_type', {
       sessionId: id,
-      text: 'echo def\n',
+      text: 'echo d""ef\n',
       maxWaitMs: 30000
     })
     expect(r.isError).toBe(false)
-    expect(r.text).toMatch(/Did not wait/)
+    expect(r.text).toMatch(/Settled in/)
+    expect(r.text).toMatch(/^def$/m)
   })
 
   it('soft reset preserves shell, hard reset replaces it', async () => {

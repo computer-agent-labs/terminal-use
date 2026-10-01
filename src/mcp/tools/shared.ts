@@ -30,28 +30,35 @@ export function describeTombstoneLine(t: TombstoneDescriptor): string {
   return `[${tag}] tombstoned: ${t.reason}${exit} at ${t.at.toISOString()}, expires ${t.expiresAt.toISOString()}`
 }
 
-export function appendSettleNote(
-  response: McpResponse,
-  result: SettleResult,
-  requestedMaxWaitMs: number
-): void {
-  if (result.outcome === 'deferred') {
-    response.appendLine(
-      `Did not wait (you set maxWaitMs=${requestedMaxWaitMs}, which is longer than the 10s cap). ` +
-        'Call `terminal_read` later to see the output.'
-    )
-    return
-  }
+export function appendSettleNote(response: McpResponse, result: SettleResult): void {
   if (result.outcome === 'timeout') {
     response.appendLine(
-      `Buffer was still active after ${result.elapsedMs}ms (${result.bytesObserved} bytes received). ` +
-        'Call `terminal_read` later to see further output.'
+      `Buffer was still active after ${result.elapsedMs}ms (${result.bytesObserved} bytes received)` +
+        (result.capped ? ' — maxWaitMs is capped at 10s here' : '') +
+        '. Call `terminal_wait` to wait for the command to finish, or `terminal_read` to check on it.'
     )
     return
   }
   response.appendLine(
     `Settled in ${result.elapsedMs}ms (${result.bytesObserved} bytes received).`
   )
+}
+
+/** Shared tail for calls during which the shell went away. */
+export function appendShellExited(response: McpResponse, session: TerminalSession): void {
+  const exit = session.exited
+  response.appendLine(
+    `The shell exited during this call${exit ? ` (exit code ${exit.exitCode})` : ''}. The next tool call ` +
+      'against this sessionId will auto-respawn — re-issue your command if relevant.'
+  )
+  const screen = session.finalScreen
+  if (screen?.length) {
+    response.appendBlank()
+    response.appendLine('Last screen before the shell exited:')
+    response.appendLine('---')
+    for (const line of screen) response.appendLine(line)
+    response.appendLine('---')
+  }
 }
 
 export function appendBufferState(response: McpResponse, state: BufferState): void {

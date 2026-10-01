@@ -29,12 +29,19 @@ function fakeSource(): FakeSource {
 }
 
 describe('waitSettled', () => {
-  it('returns deferred when maxWaitMs > HARD_CAP_MS', async () => {
+  it('clamps maxWaitMs > HARD_CAP_MS instead of skipping the wait', async () => {
     const src = fakeSource()
-    const result = await waitSettled(src, {idleMs: 200, maxWaitMs: HARD_CAP_MS + 1})
-    expect(result.outcome).toBe('deferred')
-    expect(result.elapsedMs).toBe(0)
-    expect(result.bytesObserved).toBe(0)
+    setTimeout(() => src.emit('late'), 100)
+    const result = await waitSettled(src, {idleMs: 50, maxWaitMs: HARD_CAP_MS + 1})
+    expect(result.outcome).toBe('settled')
+    expect(result.capped).toBe(true)
+    expect(result.bytesObserved).toBe(4)
+    expect(result.elapsedMs).toBeGreaterThanOrEqual(100)
+  })
+
+  it('does not flag an in-range maxWaitMs as capped', async () => {
+    const result = await waitSettled(fakeSource(), {idleMs: 10, maxWaitMs: 50})
+    expect(result.capped).toBe(false)
   })
 
   it('resolves to settled when no data arrives within initial wait', async () => {

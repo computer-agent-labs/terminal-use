@@ -34,7 +34,10 @@ function formatRespawnNotice(reason: RespawnReason, sessionId: number): string {
       if (reason.exit.signal !== undefined) {
         parts.push(`signal ${SIGNAL_NAMES[reason.exit.signal] ?? reason.exit.signal}`)
       }
-      return `${head}'s shell exited (${parts.join(', ')}) at ${reason.exit.at.toISOString()} between calls. ${tail}`
+      const screen = reason.finalScreen?.length
+        ? `\n\nLast screen before the shell exited:\n---\n${reason.finalScreen.join('\n')}\n---`
+        : ''
+      return `${head}'s shell exited (${parts.join(', ')}) at ${reason.exit.at.toISOString()} between calls. ${tail}${screen}`
     }
     case 'idle-killed':
       return `${head} was terminated due to inactivity at ${reason.at.toISOString()}. ${tail}`
@@ -45,7 +48,17 @@ function formatRespawnNotice(reason: RespawnReason, sessionId: number): string {
 
 export type CreateOptions = ContextOptions
 
+export interface TerminalUseServer {
+  server: McpServer
+  /** Kill every session and remove the attach sockets. Idempotent. */
+  dispose: () => void
+}
+
 export function createMcpServer(options: CreateOptions = {}): McpServer {
+  return createTerminalUseServer(options).server
+}
+
+export function createTerminalUseServer(options: CreateOptions = {}): TerminalUseServer {
   const server = new McpServer(
     {
       name: 'terminal-use',
@@ -56,32 +69,43 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
   )
 
   const context = new McpContext(options)
-  const mutex = new Mutex()
+  // One lock per session: calls against the same terminal stay strictly
+  // ordered, but a slow settle or wait on one session never blocks another.
+  const locks = new Map<number, Mutex>()
+  const lockFor = (sessionId: number): Mutex => {
+    let lock = locks.get(sessionId)
+    if (!lock) {
+      lock = new Mutex()
+      locks.set(sessionId, lock)
+    }
+    return lock
+  }
 
   const registerOne = (tool: (typeof TOOLS)[number]) => {
-    const handler = async (params: Record<string, unknown>): Promise<CallToolResult> => {
-      const release = await mutex.acquire()
+    const handler = async (
+      params: Record<string, unknown>,
+      extra?: {signal?: AbortSignal}
+    ): Promise<CallToolResult> => {
       const response = new McpResponse()
+      const request = {params: params as never, signal: extra?.signal}
+      // Session-management tools carry a sessionId too (terminal_destroy);
+      // lock on it so a destroy can't land in the middle of another call.
+      const sessionId = typeof params.sessionId === 'number' ? params.sessionId : undefined
+      const release = sessionId === undefined ? undefined : await lockFor(sessionId).acquire()
       try {
         if (tool.needsSession === false) {
-          await tool.handler({params: params as never}, response, context)
+          await tool.handler(request, response, context)
+        } else if (sessionId === undefined) {
+          response.setError(
+            `Tool ${tool.name} requires \`sessionId\`. Call terminal_create first to allocate one, ` +
+              'or terminal_list to enumerate currently-known ids.'
+          )
         } else {
-          if (typeof params.sessionId !== 'number') {
-            response.setError(
-              `Tool ${tool.name} requires \`sessionId\`. Call terminal_create first to allocate one, ` +
-                'or terminal_list to enumerate currently-known ids.'
-            )
+          const prep = await context.prepareForCall(sessionId)
+          if (prep.respawned) {
+            response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
           } else {
-            const prep = await context.prepareForCall(params.sessionId as number)
-            if (prep.respawned) {
-              response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
-            } else {
-              try {
-                await tool.handler({params: params as never}, response, context)
-              } finally {
-                context.clearActiveCall()
-              }
-            }
+            await context.runWithSession(sessionId, () => tool.handler(request, response, context))
           }
         }
       } catch (err) {
@@ -91,7 +115,8 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
             : String(err)
         response.setError(`Error in ${tool.name}: ${message}`)
       } finally {
-        release()
+        release?.()
+        if (sessionId !== undefined && !context.knows(sessionId)) locks.delete(sessionId)
       }
       return response.build()
     }
@@ -111,9 +136,13 @@ export function createMcpServer(options: CreateOptions = {}): McpServer {
     registerOne(tool)
   }
 
-  // No process-level signal handlers — when our process exits, the kernel
-  // closes the PTY which delivers SIGHUP to the shell, cleaning up the
-  // child tree without us doing anything explicit. Tests would accumulate
-  // listeners across many createMcpServer calls if we registered any here.
-  return server
+  const dispose = () => context.dispose()
+  // Closing the MCP connection ends the sessions' reason to exist — kill
+  // the shells and unlink the attach sockets rather than leaking them.
+  server.server.onclose = dispose
+
+  // No process-level signal handlers here — the bin entrypoint installs
+  // them and calls dispose(). Tests would accumulate listeners across many
+  // createMcpServer calls if we registered any at this level.
+  return {server, dispose}
 }

@@ -41,6 +41,7 @@ export const screenshot = defineTool({
     const page = request.params.page ?? 0
     const themeName = context.themeOf(context.activeId())
     const theme = themeName ? THEMES[themeName] : undefined
+    await session.flush()
     const result = renderToPng(session.term, {page, theme})
 
     appendBufferState(response, session.state())

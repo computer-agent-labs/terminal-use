@@ -3,7 +3,13 @@ import {z} from 'zod'
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSettleNote, renderReadWindow, requiredSessionIdField} from './shared.js'
+import {
+  appendBufferState,
+  appendSettleNote,
+  appendShellExited,
+  renderReadWindow,
+  requiredSessionIdField
+} from './shared.js'
 
 export const pressKey = defineTool({
   name: 'terminal_press',
@@ -42,15 +48,12 @@ export const pressKey = defineTool({
         ? `Pressed ${request.params.key}.`
         : `Pressed ${request.params.key} x ${count}.`
     )
-    appendSettleNote(response, result, maxWaitMs)
+    appendSettleNote(response, result)
     // Same race as terminal_type — Ctrl+D or any key that ends the shell
     // can dispose the session before we get to read its state.
     if (!session.isAlive) {
       response.appendBlank()
-      response.appendLine(
-        'The shell exited during this call. The next tool call against this ' +
-          'sessionId will auto-respawn — re-issue your command if relevant.'
-      )
+      appendShellExited(response, session)
       return
     }
     response.appendBlank()

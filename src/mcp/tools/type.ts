@@ -3,7 +3,13 @@ import {z} from 'zod'
 import {HARD_CAP_MS} from '../../emulator/settle.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendSettleNote, renderReadWindow, requiredSessionIdField} from './shared.js'
+import {
+  appendBufferState,
+  appendSettleNote,
+  appendShellExited,
+  renderReadWindow,
+  requiredSessionIdField
+} from './shared.js'
 
 export const typeText = defineTool({
   name: 'terminal_type',
@@ -11,8 +17,8 @@ export const typeText = defineTool({
     'Type literal characters into the terminal as if a human were pressing keys. ' +
     'Embedded `\\n` is normalized to `\\r` so `"git push\\n"` actually submits. ' +
     'Always waits for the buffer to settle (or to time out) before returning. ' +
-    'If `maxWaitMs > 10000`, returns immediately without waiting and asks you to ' +
-    'call `terminal_read` later.',
+    'The wait is capped at 10s; for anything slower (builds, installs, test runs) follow up with ' +
+    '`terminal_wait`, which blocks until the command actually finishes.',
   schema: {
     sessionId: requiredSessionIdField,
     text: z.string().describe('Characters to type. Embedded \\n becomes Enter.'),
@@ -29,7 +35,7 @@ export const typeText = defineTool({
       .min(0)
       .optional()
       .describe(
-        `Overall cap. If > ${HARD_CAP_MS}, the server returns immediately without waiting. Default 5000.`
+        `Overall cap on the settle wait. Default 5000, clamped to ${HARD_CAP_MS}. Use terminal_wait for longer.`
       )
   },
   annotations: {readOnlyHint: false},
@@ -39,7 +45,7 @@ export const typeText = defineTool({
     const session = context.session()
     const result = await session.writeText(request.params.text, {idleMs, maxWaitMs})
     response.appendLine(`Typed ${request.params.text.length} chars.`)
-    appendSettleNote(response, result, maxWaitMs)
+    appendSettleNote(response, result)
     // The shell can exit during settle (e.g. agent typed `exit`). When that
     // happens, McpContext's pty.onExit listener disposes the session
     // synchronously, and any further access to session.state()/.read()
@@ -47,10 +53,7 @@ export const typeText = defineTool({
     // gracefully — the next tool call against this id auto-respawns.
     if (!session.isAlive) {
       response.appendBlank()
-      response.appendLine(
-        'The shell exited during this call. The next tool call against this ' +
-          'sessionId will auto-respawn — re-issue your command if relevant.'
-      )
+      appendShellExited(response, session)
       return
     }
     response.appendBlank()

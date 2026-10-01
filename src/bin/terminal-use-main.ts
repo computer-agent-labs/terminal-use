@@ -3,7 +3,8 @@ import {parseArgs} from 'node:util'
 import {StdioServerTransport} from '@modelcontextprotocol/sdk/server/stdio.js'
 
 import {runAttachClient} from '../attach/client.js'
-import {createMcpServer, type CreateOptions} from '../index.js'
+import {createTerminalUseServer, type CreateOptions} from '../index.js'
+import {VERSION} from '../version.js'
 
 function intArg(value: string | undefined, name: string): number | undefined {
   if (value === undefined) return undefined
@@ -30,7 +31,8 @@ function printUsage(): void {
       '  --cols <n>          Initial columns (default: 120)',
       '  --rows <n>          Initial rows (default: 30)',
       '  --scrollback <n>    Scrollback lines retained (default: 5000)',
-      '  -h, --help          Show this help'
+      '  -h, --help          Show this help',
+      '  -v, --version       Print the version'
     ].join('\n')
   )
 }
@@ -52,7 +54,8 @@ const parsed = parseArgs({
     cols: {type: 'string'},
     rows: {type: 'string'},
     scrollback: {type: 'string'},
-    help: {type: 'boolean', short: 'h'}
+    help: {type: 'boolean', short: 'h'},
+    version: {type: 'boolean', short: 'v'}
   },
   allowPositionals: false,
   strict: true
@@ -60,6 +63,11 @@ const parsed = parseArgs({
 
 if (parsed.values.help) {
   printUsage()
+  process.exit(0)
+}
+
+if (parsed.values.version) {
+  console.log(VERSION)
   process.exit(0)
 }
 
@@ -73,6 +81,32 @@ const opts: CreateOptions = {
   } as CreateOptions['defaults']
 }
 
-const server = createMcpServer(opts)
+const {server, dispose} = createTerminalUseServer(opts)
+
+// Leave nothing behind: kill the shells and unlink the attach sockets
+// whichever way we go down. A plain signal death skips 'exit' handlers, so
+// the signals are handled explicitly; stdin closing means the MCP client is
+// gone (the SDK transport doesn't watch for that), and without this the
+// server would live on as an orphan holding its shells open.
+let shuttingDown = false
+const shutdown = (code: number) => {
+  if (shuttingDown) return
+  shuttingDown = true
+  try {
+    dispose()
+  } catch {
+    // exiting anyway
+  }
+  process.exit(code)
+}
+process.on('SIGINT', () => shutdown(130))
+process.on('SIGTERM', () => shutdown(143))
+process.on('SIGHUP', () => shutdown(129))
+process.stdin.on('end', () => shutdown(0))
+process.stdin.on('close', () => shutdown(0))
+process.on('exit', () => {
+  if (!shuttingDown) dispose()
+})
+
 const transport = new StdioServerTransport()
 await server.connect(transport)
