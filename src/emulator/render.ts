@@ -12,31 +12,66 @@ const FONT_FAMILY = 'JBMono'
 const FONT_FAMILY_BOLD = 'JBMonoBold'
 
 // System font fallbacks for glyphs JetBrains Mono lacks. @napi-rs/canvas
-// only falls back among fonts we register explicitly — it does NOT scan
-// system font dirs the way a real terminal does. Bundling Noto would add
-// ~10MB+ per script, so on macOS we lean on system fonts instead (first
-// existing candidate per family wins). Linux/Docker has none of these,
-// so those glyphs render as the tofu missing-glyph box there — but
-// terminal_read returns the real codepoints faithfully (see README).
-const SYSTEM_FALLBACKS = [
+// knows about installed fonts but never falls back to one on its own — a
+// family is only consulted if the font string names it. Bundling Noto would
+// add ~10MB+ per script, so we lean on what the OS has instead: per script,
+// the first candidate file that exists is registered under our own alias,
+// and failing that, the first installed family of a known name is used
+// directly. A machine with none of them (a bare Docker image) renders those
+// glyphs as the tofu missing-glyph box — terminal_read still returns the
+// real codepoints faithfully (see README).
+interface SystemFallback {
+  /** Alias the first existing file in `paths` is registered under. */
+  family: string
+  paths: string[]
+  /** Installed family names to use as-is when none of `paths` exist. */
+  systemFamilies: string[]
+}
+
+const NOTO_CJK_PATHS = [
+  // Debian/Ubuntu (fonts-noto-cjk), Fedora/RHEL (google-noto-cjk-fonts),
+  // Arch (noto-fonts-cjk), Alpine (font-noto-cjk).
+  '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc',
+  '/usr/share/fonts/noto/NotoSansCJK-Regular.ttc'
+]
+
+const SYSTEM_FALLBACKS: SystemFallback[] = [
   {
-    // Color emoji: 🎉🚀✨ — also keyed on by the wide-cell downscale below.
-    family: 'AppleEmoji',
-    candidates: ['/System/Library/Fonts/Apple Color Emoji.ttc']
+    // Color emoji: 🎉🚀✨
+    family: 'EmojiFallback',
+    paths: [
+      '/System/Library/Fonts/Apple Color Emoji.ttc',
+      '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',
+      '/usr/share/fonts/google-noto-color-emoji-fonts/NotoColorEmoji.ttf',
+      '/usr/share/fonts/noto/NotoColorEmoji.ttf'
+    ],
+    systemFamilies: ['Apple Color Emoji', 'Noto Color Emoji']
   },
   {
     // CJK: kana + Han, incl. kaomoji like ¯\_(ツ)_/¯ (ツ is U+30C4).
     family: 'CJKFallback',
-    candidates: [
+    paths: [
       '/System/Library/Fonts/Hiragino Sans GB.ttc',
       '/System/Library/Fonts/PingFang.ttc',
-      '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc'
+      '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
+      ...NOTO_CJK_PATHS
+    ],
+    systemFamilies: [
+      'Noto Sans CJK JP',
+      'Noto Sans CJK SC',
+      'Noto Sans CJK TC',
+      'WenQuanYi Micro Hei',
+      'Droid Sans Fallback'
     ]
   },
   {
-    // Hangul — the Hiragino/PingFang families above don't cover it.
+    // Hangul — the Hiragino/PingFang families above don't cover it. (Noto
+    // Sans CJK does, so on Linux this is usually the same file again.)
     family: 'HangulFallback',
-    candidates: ['/System/Library/Fonts/AppleSDGothicNeo.ttc']
+    paths: ['/System/Library/Fonts/AppleSDGothicNeo.ttc', ...NOTO_CJK_PATHS],
+    systemFamilies: ['Noto Sans CJK KR', 'NanumGothic', 'UnDotum']
   }
 ]
 const registeredFallbacks: string[] = []
@@ -92,24 +127,24 @@ function ensureFonts(): void {
     resolve(fontDir, 'JetBrainsMono-Bold.ttf'),
     FONT_FAMILY_BOLD
   )
-  if (process.platform === 'darwin') {
-    for (const {family, candidates} of SYSTEM_FALLBACKS) {
-      for (const path of candidates) {
-        if (!existsSync(path)) continue
-        try {
-          if (GlobalFonts.registerFromPath(path, family) !== null) {
-            registeredFallbacks.push(family)
-            break
-          }
-        } catch {
-          // System font may be locked down on some macOS configs — try
-          // the next candidate, then fall through and those glyphs just
-          // render as tofu (matching non-darwin behavior).
-        }
-      }
-    }
+  for (const fallback of SYSTEM_FALLBACKS) {
+    const family = registerFallback(fallback)
+    if (family) registeredFallbacks.push(family)
   }
   fontsRegistered = true
+}
+
+function registerFallback({family, paths, systemFamilies}: SystemFallback): string | undefined {
+  for (const path of paths) {
+    if (!existsSync(path)) continue
+    try {
+      if (GlobalFonts.registerFromPath(path, family) !== null) return family
+    } catch {
+      // The font may be locked down or unreadable — try the next one, and
+      // if nothing works those glyphs just render as tofu.
+    }
+  }
+  return systemFamilies.find(name => GlobalFonts.has(name))
 }
 
 function fontStack(primary: string): string {
@@ -120,13 +155,14 @@ function fontStack(primary: string): string {
 }
 
 // Distinguish emoji from CJK among width-2 cells: color emoji live in
-// the supplementary planes (U+1F000+) or carry the VS16 emoji-presentation
+// the SMP emoji blocks (U+1F000–U+1FFFF) or carry the VS16 emoji-presentation
 // selector on a BMP base (e.g. ❤️ = U+2764 U+FE0F). Everything else wide
-// (kana, Han, Hangul, full-width forms) is text and should render
-// full-size via the CJK fallback font.
-function isEmojiCell(chars: string): boolean {
+// (kana, Han — including the supplementary ideographs from U+20000 up —
+// Hangul, full-width forms) is text and should render full-size via the
+// CJK fallback font.
+export function isEmojiCell(chars: string): boolean {
   const cp = chars.codePointAt(0) ?? 0
-  return cp >= 0x1f000 || chars.includes('\ufe0f')
+  return (cp >= 0x1f000 && cp < 0x20000) || chars.includes('\ufe0f')
 }
 
 interface Metrics {
@@ -223,9 +259,8 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
       const isEmoji = isWide && isEmojiCell(ch)
       const glyphFontSize = isEmoji ? Math.round(fontSize * 0.8) : fontSize
       const glyphDx = isWide ? Math.round((drawW - glyphFontSize) / 2) : 0
-      // Append the emoji fallback so cells holding emoji codepoints (which
-      // JBMono lacks) get rendered via Apple Color Emoji on macOS. The
-      // fallback is a no-op on Linux/Docker — emoji cells stay tofu there.
+      // Append the system fallbacks so cells holding codepoints JBMono
+      // lacks (emoji, CJK) are drawn from whichever font has them.
       ctx.font = `${style}${glyphFontSize}px ${fontStack(family)}`
       ctx.fillStyle = colors.fg
       if (cell.isDim() !== 0) {

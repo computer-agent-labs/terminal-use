@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 
-import {renderToPng} from '../../src/emulator/render.js'
+import {isEmojiCell, renderToPng} from '../../src/emulator/render.js'
 import {createTerminal, writeAndFlush} from '../../src/emulator/terminal.js'
 
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
@@ -74,5 +74,17 @@ describe('renderToPng', () => {
     expect(recent.width).toBe(old.width)
     expect(recent.height).toBe(old.height)
     term.dispose()
+  })
+})
+
+describe('isEmojiCell', () => {
+  it('treats SMP emoji and VS16 sequences as emoji', () => {
+    expect(isEmojiCell('🎉')).toBe(true)
+    expect(isEmojiCell('❤\ufe0f')).toBe(true)
+  })
+
+  it('treats BMP and supplementary-plane CJK as text', () => {
+    expect(isEmojiCell('你')).toBe(false)
+    expect(isEmojiCell('\u{20000}')).toBe(false)
   })
 })
