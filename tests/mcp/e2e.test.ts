@@ -159,6 +159,72 @@ describe('MCP end-to-end', () => {
     expect(noMark.text).not.toMatch(/cursor marked with/)
   })
 
+  it('the cursor marker keeps the character under the cursor and shifts nothing', async () => {
+    const id = await createSession(harness.client)
+    await call(harness.client, 'terminal_type', {sessionId: id, text: 'abcdef', idleMs: 250, maxWaitMs: 3000})
+    const r = await call(harness.client, 'terminal_press', {
+      sessionId: id,
+      key: 'ArrowLeft',
+      count: 3,
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    expect(r.text).toContain('abcd\u0332ef')
+    expect(r.text.replaceAll('\u0332', '')).toContain('abcdef')
+  })
+
+  it('finds the cursor by character, not by cell, after wide characters', async () => {
+    const id = await createSession(harness.client)
+    await call(harness.client, 'terminal_type', {sessionId: id, text: '你好 xyz', idleMs: 250, maxWaitMs: 3000})
+    const r = await call(harness.client, 'terminal_press', {
+      sessionId: id,
+      key: 'ArrowLeft',
+      count: 3,
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    expect(r.text).toContain('你好 x\u0332yz')
+  })
+
+  it('omits the cursor marker and says so while the program has the cursor hidden', async () => {
+    const id = await createSession(harness.client)
+    const hidden = await call(harness.client, 'terminal_type', {
+      sessionId: id,
+      text: "printf '\\033[?25l'\n",
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    expect(hidden.text).toMatch(/cursor at row=\d+ col=\d+ \(hidden\)/)
+    expect(hidden.text).not.toContain('▌')
+    const shown = await call(harness.client, 'terminal_type', {
+      sessionId: id,
+      text: "printf '\\033[?25h'\n",
+      idleMs: 250,
+      maxWaitMs: 3000
+    })
+    expect(shown.text).not.toMatch(/\(hidden\)/)
+    expect(shown.text).toContain('▌')
+  })
+
+  it('sends arrow keys in application-cursor form once the program asks for it', async () => {
+    const id = await createSession(harness.client)
+    // `cat -v` shows the raw bytes it receives; DECCKM on = ESC O A expected.
+    await call(harness.client, 'terminal_type', {
+      sessionId: id,
+      text: "printf '\\033[?1h'; cat -v\n",
+      idleMs: 300,
+      maxWaitMs: 3000
+    })
+    const r = await call(harness.client, 'terminal_press', {
+      sessionId: id,
+      key: 'ArrowUp',
+      idleMs: 300,
+      maxWaitMs: 3000
+    })
+    expect(r.text).toContain('^[OA')
+    expect(r.text).not.toContain('^[[A')
+  })
+
   it('terminal_type returns gracefully when typed command exits the shell mid-settle', async () => {
     const id = await createSession(harness.client, {label: 'will-exit'})
     const r = await call(harness.client, 'terminal_type', {

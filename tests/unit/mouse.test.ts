@@ -15,6 +15,15 @@ describe('leftClickSequence', () => {
     expect(leftClickSequence(500, 300)).toBe('\x1b[<0;500;300M\x1b[<0;500;300m')
   })
 
+  it('falls back to legacy X10 bytes when the program did not enable SGR mode', () => {
+    // 32 + button(0), 32 + col, 32 + row; release reports button 3.
+    expect(leftClickSequence(5, 10, false)).toBe('\x1b[M %*\x1b[M#%*')
+  })
+
+  it('refuses legacy coordinates that would not survive as single bytes', () => {
+    expect(() => leftClickSequence(120, 3, false)).toThrow(/legacy mouse encoding/)
+  })
+
   it('press uses uppercase M, release uses lowercase m', () => {
     const seq = leftClickSequence(7, 3)
     const press = seq.slice(0, seq.indexOf('M') + 1)

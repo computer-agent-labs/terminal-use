@@ -73,8 +73,11 @@ const TILDE_KEYS: Record<string, number> = {
 
 const F1_F4: Record<string, string> = {f1: 'P', f2: 'Q', f3: 'R', f4: 'S'}
 
-function arrowSequence(letter: string, mod: number): string {
-  if (mod === 1) return `\x1b[${letter}`
+function arrowSequence(letter: string, mod: number, applicationCursor: boolean): string {
+  // DECCKM: programs that switch on application cursor keys (curses with
+  // keypad(), less, htop…) expect SS3 for unmodified arrows/Home/End — it's
+  // what terminfo's kcuu1 etc. say for xterm. Modified keys stay CSI.
+  if (mod === 1) return applicationCursor ? `\x1bO${letter}` : `\x1b[${letter}`
   return `\x1b[1;${mod}${letter}`
 }
 
@@ -88,7 +91,12 @@ function f1f4Sequence(letter: string, mod: number): string {
   return `\x1b[1;${mod}${letter}`
 }
 
-export function keyToBytes(spec: string): string {
+export interface KeyEncodingOptions {
+  /** Whether the foreground program has enabled application cursor keys (DECCKM). */
+  applicationCursor?: boolean
+}
+
+export function keyToBytes(spec: string, options: KeyEncodingOptions = {}): string {
   const p = parseKeySpec(spec)
   const baseLower = p.base.toLowerCase()
   const mod = modifierParam(p)
@@ -100,7 +108,11 @@ export function keyToBytes(spec: string): string {
   }
   if (baseLower === 'enter' || baseLower === 'return') {
     if (mod === 1) return '\r'
-    throw new Error(`Unsupported modifier combination on Enter: ${spec}`)
+    if (p.alt && !p.ctrl && !p.shift && !p.meta) return '\x1b\r'
+    throw new Error(
+      `Unsupported modifier combination on Enter: ${spec}. Legacy terminals cannot encode ` +
+        'Shift+Enter or Ctrl+Enter; most TUIs accept Alt+Enter for "newline without submit".'
+    )
   }
   if (baseLower === 'escape' || baseLower === 'esc') {
     if (mod === 1) return '\x1b'
@@ -119,7 +131,7 @@ export function keyToBytes(spec: string): string {
 
   const arrow = ARROW_LETTERS[baseLower]
   if (arrow !== undefined) {
-    return arrowSequence(arrow, mod)
+    return arrowSequence(arrow, mod, options.applicationCursor === true)
   }
 
   const tilde = TILDE_KEYS[baseLower]
@@ -159,11 +171,11 @@ export function keyToBytes(spec: string): string {
     if (p.base === '?') return '\x7f'
   }
 
-  throw new Error(`Unknown key: ${spec}`)
-}
+  // Alt + any other single printable character (digits, punctuation):
+  // ESC-prefixed, same as Alt+letter. Covers readline's Alt+. / Alt+< etc.
+  if (p.alt && !p.ctrl && !p.shift && !p.meta && /^[\x21-\x7e]$/.test(p.base)) {
+    return `\x1b${p.base}`
+  }
 
-export function keyToBuffer(spec: string, count = 1): Buffer {
-  const bytes = keyToBytes(spec)
-  if (count <= 1) return Buffer.from(bytes, 'utf8')
-  return Buffer.from(bytes.repeat(count), 'utf8')
+  throw new Error(`Unknown key: ${spec}`)
 }

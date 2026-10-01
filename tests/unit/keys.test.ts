@@ -98,6 +98,39 @@ describe('keyToBytes - arrows', () => {
   })
 })
 
+describe('keyToBytes - application cursor mode (DECCKM)', () => {
+  it('unmodified arrows, Home and End switch to SS3', () => {
+    const opts = {applicationCursor: true}
+    expect(keyToBytes('ArrowUp', opts)).toBe('\x1bOA')
+    expect(keyToBytes('ArrowLeft', opts)).toBe('\x1bOD')
+    expect(keyToBytes('Home', opts)).toBe('\x1bOH')
+    expect(keyToBytes('End', opts)).toBe('\x1bOF')
+  })
+
+  it('modified arrows stay CSI', () => {
+    expect(keyToBytes('Ctrl+ArrowLeft', {applicationCursor: true})).toBe('\x1b[1;5D')
+  })
+
+  it('normal mode is unchanged', () => {
+    expect(keyToBytes('ArrowUp', {applicationCursor: false})).toBe('\x1b[A')
+  })
+})
+
+describe('keyToBytes - Alt combos', () => {
+  it('Alt+Enter → ESC CR', () => {
+    expect(keyToBytes('Alt+Enter')).toBe('\x1b\r')
+  })
+
+  it('Alt+punctuation and Alt+digit are ESC-prefixed', () => {
+    expect(keyToBytes('Alt+.')).toBe('\x1b.')
+    expect(keyToBytes('Alt+1')).toBe('\x1b1')
+  })
+
+  it('Shift+Enter is rejected with a pointer to Alt+Enter', () => {
+    expect(() => keyToBytes('Shift+Enter')).toThrow(/Alt\+Enter/)
+  })
+})
+
 describe('keyToBytes - tilde keys', () => {
   it.each([
     ['Insert', '\x1b[2~'],

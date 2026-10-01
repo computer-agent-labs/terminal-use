@@ -258,7 +258,7 @@ export class TerminalSession {
 
   async pressKey(spec: string, count: number, settle: SettleOptions): Promise<SettleResult> {
     this.#assertAlive()
-    const sequence = keyToBytes(spec)
+    const sequence = keyToBytes(spec, {applicationCursor: this.#term.modes.applicationCursorKeysMode})
     const payload = count <= 1 ? sequence : sequence.repeat(count)
     const settler = waitSettled(ptyAsSource(this.#pty), settle)
     this.#pty.write(payload)
@@ -279,8 +279,9 @@ export class TerminalSession {
 
   async sendLeftClick(col: number, row: number, settle: SettleOptions): Promise<SettleResult> {
     this.#assertAlive()
+    const sequence = leftClickSequence(col, row, isSgrMouseEnabled(this.#term))
     const settler = waitSettled(ptyAsSource(this.#pty), settle)
-    this.#pty.write(leftClickSequence(col, row))
+    this.#pty.write(sequence)
     const result = await settler
     await this.flush()
     return result
