@@ -89,6 +89,24 @@ function makeServerSession(): {server: AttachServer; session: TerminalSession; u
 }
 
 describe('AttachServer over a Unix socket', () => {
+  it('replays the current screen to a client that attaches late', async () => {
+    const {server, session} = makeServerSession()
+    await session.writeText('echo before-att""ach\n', {idleMs: 250, maxWaitMs: 3000})
+    // Nothing further is printed after this point: without a replay the
+    // client would see an empty terminal.
+    const c = await connectClient(server.socketPath)
+    cleanups.push(() => c.close())
+    await waitMs(300)
+    expect(c.text()).toMatch(/before-attach/)
+  })
+
+  it('a socket that cannot be bound is reported, not thrown', async () => {
+    const server = new AttachServer(join(tmpdir(), 'terminal-use-no-such-dir', 'x', 'y.sock'))
+    cleanups.push(() => server.close())
+    await waitMs(100)
+    expect(server.error).toBeInstanceOf(Error)
+  })
+
   it('forwards DATA frames from a connected client into the PTY', async () => {
     const {server} = makeServerSession()
     const c = await connectClient(server.socketPath)

@@ -21,6 +21,10 @@ const BIN_PATH = (() => {
   }
 })()
 
+function shellQuote(s: string): string {
+  return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`
+}
+
 export const create = defineTool({
   name: 'terminal_create',
   description:
@@ -70,12 +74,16 @@ export const create = defineTool({
         'this session or type into it from their own terminal alongside you, share this ' +
         'command for them to run in their own terminal:'
     )
-    response.appendLine(`    node ${BIN_PATH} attach ${desc.sessionId}`)
+    // --socket pins the command to THIS server: several terminal-use servers
+    // (one per MCP client) routinely run at once, each numbering from 1.
+    const socketPath = context.socketPathFor(desc.sessionId)
+    response.appendLine(
+      `    node ${shellQuote(BIN_PATH)} attach ${desc.sessionId} --socket ${shellQuote(socketPath)}`
+    )
     response.appendLine(
       '(They press Ctrl+] to detach. They can pass --resize to make their terminal ' +
-        "size override the session's. The socket lives at " +
-        context.socketPathFor(desc.sessionId) +
-        ' and survives shell exits and auto-respawns. Do NOT run this command yourself — ' +
+        "size override the session's. The socket survives shell exits and auto-respawns. " +
+        'Do NOT run this command yourself — ' +
         'you already drive this session through the terminal_* tools; the attach command ' +
         'is a separate CLI for the human user.)'
     )
