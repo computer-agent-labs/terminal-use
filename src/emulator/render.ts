@@ -218,6 +218,20 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
   ctx.fillRect(0, 0, width, height)
   ctx.textBaseline = 'alphabetic'
 
+  // Block cursor, drawn the way terminals draw it: the cell is filled with
+  // the cursor color and the character under it is repainted in the
+  // background color, so it stays legible. Honors DECTCEM — a TUI that hid
+  // the cursor gets none.
+  const cursorRow = drawCursor && page === 0 && !isCursorHidden(term) ? buf.baseY + buf.cursorY : -1
+  let cursorCol = -1
+  if (cursorRow >= start && cursorRow <= end) {
+    // cursorX equals `cols` while a wrap is pending; and on the trailing
+    // half of a wide character the cell that owns the glyph is one back.
+    cursorCol = Math.min(buf.cursorX, cols - 1)
+    const cursorLine = buf.getLine(cursorRow)
+    while (cursorCol > 0 && cursorLine?.getCell(cursorCol)?.getWidth() === 0) cursorCol--
+  }
+
   for (let row = 0; row < rows; row++) {
     const y = start + row
     if (y > end) break
@@ -229,7 +243,10 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
       const cellWidth = cell.getWidth()
       if (cellWidth === 0) continue
       const ch = cell.getChars() || ' '
-      const colors = resolveCellColors(cell, theme)
+      const underCursor = y === cursorRow && col === cursorCol
+      const colors = underCursor
+        ? {fg: theme.background, bg: theme.cursor}
+        : resolveCellColors(cell, theme)
       const drawW = metrics.cellWidth * cellWidth
       const x = padding + col * metrics.cellWidth
       const yPx = padding + row * metrics.cellHeight
@@ -277,20 +294,6 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
         ctx.fillStyle = colors.fg
         ctx.fillRect(x, yPx + Math.floor(metrics.cellHeight / 2), drawW, 1)
       }
-    }
-  }
-
-  // Honor DECTCEM: a TUI that hid the cursor shouldn't get a stray block.
-  if (drawCursor && page === 0 && !isCursorHidden(term)) {
-    const cursorRowAbs = buf.baseY + buf.cursorY
-    if (cursorRowAbs >= start && cursorRowAbs <= end) {
-      const cursorRowInWindow = cursorRowAbs - start
-      const cx = padding + buf.cursorX * metrics.cellWidth
-      const cy = padding + cursorRowInWindow * metrics.cellHeight
-      ctx.fillStyle = theme.cursor
-      ctx.globalAlpha = 0.6
-      ctx.fillRect(cx, cy, metrics.cellWidth, metrics.cellHeight)
-      ctx.globalAlpha = 1
     }
   }
 

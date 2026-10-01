@@ -90,6 +90,17 @@ export function markCursor(line: string, cursor: CursorInText): string {
   return line.slice(0, index) + CURSOR_MARKER + line.slice(index + 1)
 }
 
+/**
+ * Plain text has no inverse video, so on top of the inline mark the header
+ * names the character the cursor is on — that part can't be missed.
+ */
+function describeCursor(win: ReadWindow): string {
+  const line = win.text[win.state.cursorRow - win.window.start] ?? ''
+  const {index, length} = win.cursor
+  if (length === 0 || index >= line.length) return `cursor marked with "${CURSOR_MARKER}"`
+  return `cursor is on the underlined ${JSON.stringify(line.slice(index, index + length))}`
+}
+
 export function renderReadWindow(
   response: McpResponse,
   win: ReadWindow,
@@ -115,7 +126,7 @@ export function renderReadWindow(
   }
   response.appendLine(
     `Showing rows ${win.window.start}..${win.window.end} (page ${win.window.page + 1} of ${win.window.totalPages}, ` +
-      `${win.window.rows} rows per page${showCursor ? `; cursor marked with "${CURSOR_MARKER}", or by underlining the character it is on` : ''}):`
+      `${win.window.rows} rows per page${showCursor ? `; ${describeCursor(win)}` : ''}):`
   )
   response.appendLine('---')
   for (const line of lines) {

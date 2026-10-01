@@ -6,6 +6,18 @@ import {createTerminal, writeAndFlush} from '../../src/emulator/terminal.js'
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 describe('renderToPng', () => {
+  it('keeps the character under the block cursor visible', async () => {
+    const onChar = createTerminal({cols: 20, rows: 4})
+    await writeAndFlush(onChar, 'abW\x1b[1;3H')
+    const onBlank = createTerminal({cols: 20, rows: 4})
+    await writeAndFlush(onBlank, 'ab \x1b[1;3H')
+    // Same cursor cell in both; they can only differ if the glyph is
+    // painted inside the block rather than covered by it.
+    expect(renderToPng(onChar).buffer.equals(renderToPng(onBlank).buffer)).toBe(false)
+    onChar.dispose()
+    onBlank.dispose()
+  })
+
   it('draws no cursor block while the program has the cursor hidden', async () => {
     const term = createTerminal({cols: 20, rows: 4})
     await writeAndFlush(term, 'abc')

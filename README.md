@@ -38,8 +38,8 @@ Each of these requires `sessionId`. Get one by calling `terminal_create`.
 | `terminal_wait` | Block until the running command finishes, or until a regex appears on screen. See *Waiting* below. |
 | `terminal_resize` | Change cols/rows; either is optional (preserves current). |
 | `terminal_reset` | Wipe buffer; `hardReset: true` kills + respawns the shell. |
-| `terminal_read` | Read the buffer, paginated in screen-sized windows. Cursor marked inline by default, without moving or hiding any text: `▌` when it sits on an empty cell, otherwise the character it is on is underlined (combining U+0332). Omitted while the program hides the cursor; `cursor: false` returns the text untouched. |
-| `terminal_screenshot` | PNG of the current screen (or any earlier screen-sized window via `page`). |
+| `terminal_read` | Read the buffer, paginated in screen-sized windows. Cursor marked inline by default, without moving or hiding any text: `▌` when it sits on an empty cell, otherwise the character it is on is underlined (combining U+0332) and named in the header (`cursor is on the underlined "d"`). Omitted while the program hides the cursor; `cursor: false` returns the text untouched. |
+| `terminal_screenshot` | PNG of the current screen (or any earlier screen-sized window via `page`). The cursor is a block in inverse video — the character under it stays readable — and is left out while the program hides it. |
 | `terminal_click` | Left-click at a (col, row) cell. See *Click semantics* below. |
 
 ### Session management

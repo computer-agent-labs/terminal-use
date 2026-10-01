@@ -171,6 +171,7 @@ describe('MCP end-to-end', () => {
       maxWaitMs: 3000
     })
     expect(r.text).toContain('abcd\u0332ef')
+    expect(r.text).toContain('cursor is on the underlined "d"')
     expect(r.text.replaceAll('\u0332', '')).toContain('abcdef')
   })
 
