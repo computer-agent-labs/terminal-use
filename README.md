@@ -1,194 +1,189 @@
 # terminal-use
 
-An MCP server that gives an AI agent first-class control of a real
-pseudo-terminal — the same way a human user drives a terminal: type
-characters, press keys, watch output update, resize the window, take a
-screenshot, reset and start over.
+An [MCP](https://modelcontextprotocol.io) server that lets an AI agent use a real terminal the way a person does: type, press keys, click, read the screen, take a screenshot.
 
-## Architecture
+Most agent shell tools run a command and hand back its output. That breaks down for anything interactive — `vim`, `htop`, a REPL, an installer asking questions, `git rebase -i`, an SSH session. terminal-use gives the agent a shell on a real pseudo-terminal, rendered by a real terminal emulator, so full-screen and interactive programs work and the agent sees what you would see.
 
-`node-pty` spawns a real shell. Its byte stream is fed into a headless
-`@xterm/headless` terminal emulator that holds the authoritative
-buffer. The emulator is the source of truth for both text reads and
-PNG snapshots — that way the agent sees exactly what a user would see
-(ANSI colors interpreted, alt-buffer switches honored, cursor where it
-actually is), not the raw byte stream.
+- **Real PTY, real emulator** — colors, cursor movement and the alternate screen are interpreted, not passed along as escape codes.
+- **Text and pixels** — read the screen as plain text, or as a PNG when layout and color matter.
+- **Waits properly** — block until a command actually finishes, or until some text appears.
+- **Watch along** — attach your own terminal to any session and type alongside the agent.
 
-## Protocol
+## Quick start
 
-Built on the v2 MCP TypeScript SDK (`@modelcontextprotocol/server`). Over stdio it serves both protocol eras, chosen by the client's opening message:
+Requires Node.js 20.19 or newer, on macOS or Linux.
 
-- **2026-07-28**, the stateless revision — no `initialize` handshake, no protocol-level session; every request is self-contained.
-- **2025-11-25 and earlier**, with the handshake, for clients that haven't moved yet.
+**Claude Code**
 
-"Stateless" describes the protocol, not the terminals. The 2026 spec's rule is that a server needing state across calls hands out an explicit handle and takes it back as an ordinary tool argument — which is what `sessionId` already is. Sessions live in the server process, outside any one connection's protocol state, so nothing about them depends on the era.
+```bash
+claude mcp add terminal-use --scope user -- npx -y terminal-use
+```
 
-Also advertised: server `instructions` (how the tools fit together, read by the model before its first call), a `title` and behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) on every tool, tools listed in a stable order, JSON Schema 2020-12 input schemas, request cancellation, and progress notifications from `terminal_wait` when the client supplies a progress token.
+**Other MCP clients** (Claude Desktop, Cursor, and anything else that takes a command):
+
+```json
+{
+  "mcpServers": {
+    "terminal-use": {
+      "command": "npx",
+      "args": ["-y", "terminal-use"]
+    }
+  }
+}
+```
+
+Start a new session in your client and ask it to do something in a terminal, for example: *"Open vim, write a haiku into /tmp/haiku.txt, save and quit, then show me a screenshot of `cat`-ing it."*
+
+Server options go after the command: `npx -y terminal-use --cols 100 --rows 40`.
+
+| Option | Default | |
+|---|---|---|
+| `--shell <path>` | `$SHELL` or `/bin/bash` | Shell to run in new sessions |
+| `--cwd <path>` | where the server was started | Working directory for new sessions |
+| `--cols <n>` / `--rows <n>` | `120` / `30` | Terminal size |
+| `--scrollback <n>` | `5000` | Lines of history kept |
 
 ## Tools
 
-### Per-session (act on a specific terminal)
+Every tool except `terminal_create` and `terminal_list` takes the `sessionId` that `terminal_create` returns.
 
-Each of these requires `sessionId`. Get one by calling `terminal_create`.
-
-| Tool | Purpose |
+| Tool | What it does |
 |---|---|
-| `terminal_type` | Type literal characters; `\n` is normalized to Enter. |
-| `terminal_press` | Press named keys/combos (`Enter`, `Ctrl+C`, `ArrowUp`, `Shift+Tab`, `Alt+Enter`, `F1`…). |
-| `terminal_wait` | Block until the running command finishes, or until a regex appears on screen. See *Waiting* below. |
-| `terminal_resize` | Change cols/rows; either is optional (preserves current). |
-| `terminal_reset` | Wipe buffer; `hardReset: true` kills + respawns the shell. |
-| `terminal_read` | Read the buffer, paginated in screen-sized windows. Cursor marked inline with `▌` by default: on an empty cell it takes the place of the blank; on a character it is inserted in front of it (nothing is overwritten, but the rest of that one line shifts right a column) and the header says which character. Omitted while the program hides the cursor; `cursor: false` returns the text untouched. |
-| `terminal_screenshot` | PNG of the current screen (or any earlier screen-sized window via `page`). The cursor is a block in inverse video — the character under it stays readable — and is left out while the program hides it. |
-| `terminal_click` | Left-click at a (col, row) cell. See *Click semantics* below. |
+| `terminal_create` | Start a session (a shell on its own PTY). Optional `label`, `cols`, `rows`, `shell`, `cwd`, `scrollback`, `theme`. |
+| `terminal_list` | List sessions. |
+| `terminal_destroy` | End a session. |
+| `terminal_type` | Type text. `\n` presses Enter. |
+| `terminal_press` | Press a key or combination: `Enter`, `Ctrl+C`, `ArrowUp`, `Shift+Tab`, `Alt+Enter`, `F5`… |
+| `terminal_wait` | Wait for the running command to finish, for a regex to appear, or for output to go quiet. |
+| `terminal_read` | Read the screen or scrollback as text. |
+| `terminal_screenshot` | Render the screen as a PNG. |
+| `terminal_click` | Left-click a cell, with a preview step. |
+| `terminal_resize` | Change the terminal size. |
+| `terminal_reset` | Clear the screen and scrollback, or restart the shell with `hardReset: true`. |
 
-### Session management
+## Watching and typing along
 
-| Tool | Purpose |
-|---|---|
-| `terminal_create` | Spawn a new session and return its numeric id; optional `label` for `terminal_list` display. |
-| `terminal_list` | List live sessions and tombstoned ids. |
-| `terminal_destroy` | Kill a session and forget the id entirely. |
+`terminal_create` returns a command you can run in your own terminal to join the session:
 
-### Waiting
+```
+node /path/to/terminal-use/bin/terminal-use.js attach 3 --socket /tmp/terminal-use-501/terminal-use-41234-3.sock
+```
 
-`terminal_type`, `terminal_press` and `terminal_click` return once output has been quiet for `idleMs` (default 200 ms), and never wait longer than 10 s — `maxWaitMs` above that is clamped. That is the right behavior for keystrokes, and the wrong one for a build: a command that prints nothing for a while looks "settled" long before it is done.
+You see what the agent sees and can type into the same shell. It works like a shared `tmux` session: several people can attach at once, and **Ctrl+]** detaches.
 
-`terminal_wait` is for everything slower:
+- You get the current screen and recent scrollback on connect, not a blank terminal.
+- `--resize` makes the session follow your window size. By default the session keeps its own.
+- `--socket` picks the server. Each MCP client runs its own terminal-use, and they all number sessions from 1; without `--socket`, `attach <id>` works when only one running server has that id and lists the candidates otherwise.
+- Sockets are per-user (`0600`, inside a `0700` directory under the system temp dir). Anyone who can connect gets a shell as you, so they are not exposed any further than that.
 
-- **No `pattern` — wait for the command to finish.** It asks the kernel which process group owns the terminal's foreground (`ps -o tpgid=,pgid=` on the shell). An interactive shell hands the terminal to each command it runs and takes it back afterwards, so "the shell owns the foreground again, and output has been quiet for `quietMs`" means the prompt is back. No shell integration, prompt parsing or rc-file changes are involved, and it stays correct for commands that are silent (`sleep 60`) or never stop printing.
-- **With `pattern` — wait for a regex to match the screen** (the viewport plus the 200 rows above it). Use this for things that never exit (`Listening on`), REPL prompts, and TUI states. A leading `(?i)` / `(?m)` / `(?s)` is accepted as a flag prefix.
-- **`until: "quiet"` — wait for output to stop** for `quietMs` (default 1 s), whoever owns the terminal. The same "settled" rule the typing tools use, without their 10 s cap; for nested programs where neither of the above fits.
-- `timeoutMs` defaults to 30 s (max 10 min). Running out of time is not an error; the response says the command is still running and you can call `terminal_wait` again.
+## How it works
 
-Limits: background jobs (`cmd &`) don't count as running; inside a nested program (ssh, a REPL, a TUI) the outer shell doesn't regain the foreground until that program exits, so use `pattern` there; no exit status is reported (run `echo $?`). On Windows, or where `ps` is unavailable, the foreground can't be queried and the tool falls back to a 2 s output-quiet heuristic and says so.
+```
+agent ──MCP──▶ terminal-use ──▶ node-pty ──▶ your shell
+                  │
+                  └─ @xterm/headless  ◀── everything the shell prints
+                        │
+                        ├─ terminal_read        (text)
+                        └─ terminal_screenshot  (PNG)
+```
 
-### Themes
+[`node-pty`](https://github.com/microsoft/node-pty) runs the shell on a pseudo-terminal. Everything it prints is fed to a headless [xterm.js](https://xtermjs.org) emulator, and that emulator's buffer is the single source of truth: reads and screenshots both come from it, so the agent gets the rendered screen rather than a stream of escape codes.
 
-`terminal_screenshot` and `terminal_click`'s preview PNG render using the session's theme. The theme is picked at `terminal_create` time via the `theme` arg, and persists across `terminal_reset({hardReset: true})` and auto-respawn:
+## Details
 
-| theme name | description |
-|---|---|
-| `dark` *(default)* | VS Code Dark+ — dark background (`#1e1e1e`) with bright ANSI palette. |
-| `light` | VS Code Light+ — white background, dark text. |
-| `solarized-dark` | Ethan Schoonover's Solarized, dark variant. |
-| `solarized-light` | Solarized, light variant. |
+### Waiting for things
 
-Pass e.g. `terminal_create({label: 'work', theme: 'solarized-dark'})`. `terminal_list` shows each session's theme in the descriptor line.
+`terminal_type`, `terminal_press` and `terminal_click` return once output has been quiet for a moment (`idleMs`, default 200 ms) and never wait longer than 10 seconds. That suits keystrokes. It doesn't suit a build, which can be silent for a while long before it is done. For anything slow, follow up with `terminal_wait`:
 
-### Renderer glyph coverage
+- **Default — wait for the command to finish.** terminal-use asks the kernel which process owns the terminal's foreground. A shell hands the terminal to each command it runs and takes it back afterwards, so when the shell owns it again, the prompt is back. This needs no shell integration or prompt parsing, and works for commands that print nothing.
+- **`pattern` — wait for a regex to match the screen.** For things that never exit (`Listening on port`), REPL prompts, or a particular state of a TUI. A leading `(?i)`, `(?m)` or `(?s)` sets flags.
+- **`until: "quiet"` — wait for output to stop** for `quietMs` (default 1 s). The same rule the typing tools use, without the 10-second cap.
 
-`terminal_screenshot` and `terminal_click`'s preview PNG use **JetBrains Mono Regular + Bold** as the bundled fonts. That covers Latin, Greek, Cyrillic, ANSI box-drawing (`┌─┬─┐` etc.), and most general-purpose symbols.
+`timeoutMs` defaults to 30 seconds (maximum 10 minutes). A timeout isn't an error: the response says the command is still running, and you can wait again.
 
-**Emoji, CJK** (`你好`, Japanese kana — including kaomoji such as `¯\_(ツ)_/¯`) **and Hangul** (`한글`) are not in JetBrains Mono, and we don't bundle Noto for them (~10 MB for emoji, ~7 MB per CJK region). The renderer falls back to fonts the OS already has:
+Limits worth knowing: background jobs (`cmd &`) don't count as running. Inside a nested program such as `ssh` or a REPL, the outer shell doesn't get the foreground back until that program exits, so use `pattern` or `until: "quiet"` there. No exit status is reported; run `echo $?`.
 
-| | emoji | CJK | Hangul |
+### Reading the screen
+
+`terminal_read` returns text in screen-sized pages: `page: 0` is the current screen, `page: 1` the one before it, and so on back through scrollback.
+
+The cursor is marked with `▌`. On an empty cell it simply takes the place of the blank. On a character it is inserted in front of that character, which shifts the rest of that one line right by a column; the header says which character it is on. The marker is left out while the program hides the cursor (most full-screen programs do), and `cursor: false` returns the text untouched.
+
+### Screenshots
+
+`terminal_screenshot` renders the screen with the bundled JetBrains Mono. Sessions take a `theme` at creation: `dark` (default), `light`, `solarized-dark` or `solarized-light`.
+
+JetBrains Mono covers Latin, Greek, Cyrillic, box-drawing and common symbols. Emoji, Chinese/Japanese and Korean text fall back to fonts already on the system, because bundling them would add tens of megabytes:
+
+| | Emoji | CJK | Hangul |
 |---|---|---|---|
-| **macOS** | Apple Color Emoji | Hiragino Sans GB / PingFang | Apple SD Gothic Neo |
-| **Linux** | Noto Color Emoji | Noto Sans CJK | Noto Sans CJK |
+| macOS | Apple Color Emoji | Hiragino Sans GB / PingFang | Apple SD Gothic Neo |
+| Linux | Noto Color Emoji | Noto Sans CJK | Noto Sans CJK |
 
-macOS ships all of these. On Linux they are optional packages — `apt install fonts-noto-color-emoji fonts-noto-cjk` on Debian/Ubuntu (verified in `node:22-bookworm`); the Fedora, Arch and Alpine package locations are probed too but untested. Where the fonts aren't installed (a bare Docker image), those cells render as tofu boxes.
+macOS has these out of the box. On Debian or Ubuntu, install them with `apt install fonts-noto-color-emoji fonts-noto-cjk`. Without them (a bare Docker image, say) those characters render as empty boxes in screenshots. Nerd Font and Powerline icons render as boxes everywhere. `terminal_read` is unaffected and always returns the real characters.
 
-**Nerd Font / Powerline icons** that live in the supplementary Private Use Area render as tofu on every platform — we don't bundle a Nerd Font.
+### Clicking
 
-The text path (`terminal_read`) is unaffected — it returns the exact codepoints from xterm-headless's buffer, faithfully including everything. So when working with content that has tofu'd glyphs in the PNG, prefer `terminal_read` for ground truth and use the screenshot to spot-check layout / colors / ANSI styling.
+- Left button only. Coordinates are 1-indexed; `(1, 1)` is the top-left cell.
+- **`preview` is on by default.** A preview returns a screenshot with a ring drawn around the target cell and sends no click. Repeat the call with `preview: false` to click. Full-screen programs often have destructive actions one click away, so it is worth the extra step.
+- A real click needs the program to have turned on mouse reporting — `vim` with `set mouse=a`, `fzf`, `lazygit`, `htop` and most modern TUIs do. At a plain shell prompt the call returns an error instead of printing escape codes into your command line.
 
-### Click semantics
+### Session lifecycle
 
-- **Left-button only**, no modifiers, no right/middle/wheel (v1 scope).
-- **Coordinates are 1-indexed**: `(col 1, row 1)` is the top-left cell of the live viewport, `(term.cols, term.rows)` is the bottom-right.
-- **`preview` defaults to `true`.** A preview call renders a PNG with a bright magenta ring + dark halo + center dot drawn at the target cell, plus a `(col N, row M)` coordinate label off to the side. *No click is sent.* The agent inspects the preview and then, if the target is right, repeats with `preview: false`.
-- **Execute mode requires the foreground program to have enabled mouse tracking.** Vim with `set mouse=a`, fzf, lazygit, less with `--mouse`, and most modern TUIs auto-enable it on startup. At a plain shell prompt, mouse mode is off and an execute call returns `isError: true` with an explanatory message rather than printing junk escape sequences as text.
-- **Wire-level encoding follows what the program asked for**: SGR (`CSI <0;col;row M` press, `m` release) when it enabled mode 1006, which every modern TUI does; otherwise legacy X10 bytes, which can only address cells up to column/row 95. Press + release are sent atomically.
-- **Known cosmetic limit**: when the target is in the rightmost ~10 columns, the coordinate label drawn next to the ring may clip off the canvas. The ring itself is always in frame, so trust it over the label.
-- **`idleMs` / `maxWaitMs` are accepted but ignored in preview mode** (preview never settles).
+- Sessions are independent. Calls to one session run in order; calls to different sessions don't block each other.
+- If a session's shell exits, the session sits idle for six hours, or the 50-session limit is reached, the session is shut down but its id stays reserved for 30 days. The next call to that id starts a fresh shell with the same size, shell, working directory and theme, and returns a notice saying what happened — including the last screen the old shell printed, if it exited on its own. The command in that call is *not* run; send it again if you still want it.
+- Idle means no tool calls and no output. A dev server that is still printing is not idle.
+- `terminal_destroy` ends a session for good; its id is not reserved.
+- When the MCP client disconnects or the server is stopped, every shell is closed and every attach socket removed.
 
-### Attach (tmux-style human attach)
+### Protocol support
 
-You can attach to any live session from your own terminal and watch / type alongside the agent.
+Built on the official MCP TypeScript SDK (v2). Over stdio it speaks both the 2026-07-28 revision of the protocol, which is stateless, and the earlier handshake-based revisions; the client's first message decides which.
 
-`terminal_create` prints the attach command in its response — the agent can quote it back to you:
+Stateless refers to the protocol, not the terminals: sessions live in the server process and are addressed by the `sessionId` you pass on each call. The server also provides usage instructions, titles and behavior hints for each tool, cancellation, and progress updates from `terminal_wait`.
 
-```
-node /abs/path/terminal-use/bin/terminal-use.js attach 3 --socket /tmp/terminal-use-501/terminal-use-41234-3.sock
-```
+## Platform support
 
-What it does:
+| | |
+|---|---|
+| macOS (arm64, x64) | Supported |
+| Linux (arm64, x64) | Supported |
+| Windows | Untested. It may start, but nothing has been run there. |
 
-- Connects to a per-session Unix domain socket, `terminal-use-<server-pid>-<sessionId>.sock`, inside a private per-user directory `<tmpdir>/terminal-use-<uid>/` (directory 0700, socket 0600 — same Unix user only). `<tmpdir>` is `/tmp` on Linux and `/var/folders/…/T` on macOS.
-- **`--socket` pins the command to one server.** Every MCP client starts its own terminal-use server and each numbers its sessions from 1, so `attach 1` alone is often ambiguous. Without `--socket` the client looks the id up among running servers: one match attaches, several are listed for you to choose from. Sockets left behind by servers that no longer exist are deleted during the lookup.
-- On attach you are sent the session's current screen and up to 1000 lines of scrollback, so an idle shell or a running TUI appears immediately rather than after its next redraw. It is drawn for the session's size; pass `--resize` if your window differs.
-- The PTY's output is broadcast to every attached client *and* the xterm-headless buffer the agent reads from. The agent and any attached humans are peers on the same PTY.
-- Multiple concurrent attaches are allowed (tmux-style). All clients see the same output; any client's typing reaches the shell.
-- Press **Ctrl+]** to detach. Your terminal is put back in order on the way out (alternate screen, mouse reporting, bracketed paste, cursor visibility), since the program in the session is still running and will never send those resets itself.
-- Pass `--resize` to make the human's terminal size override the session's (and SIGWINCH-resize the session as the human resizes their window). Default is to leave the session size alone.
-- The socket survives across shell-exit / idle-kill / eviction — your connection stays open and you'll see new output as soon as the next tool call against this id triggers a respawn. It goes away on `terminal_destroy`, when the 30-day tombstone retention expires, and when the server shuts down.
-- If the socket can't be created, the session still works; only attach is unavailable.
+The native dependencies (`node-pty`, `@napi-rs/canvas`) ship prebuilt binaries, so no compiler is needed to install.
 
-### Lifecycle
-
-- **`sessionId` is required on every per-session tool.** There is no shared default. Two MCP clients (or two Claude Code sessions sharing one server) cannot accidentally talk to the same shell.
-- **Calls are serialized per session, not globally.** Two calls against the same terminal run in order; a long `terminal_wait` on one session does not hold up another.
-- **Sessions go to the tombstone for system-driven termination, not for `terminal_destroy`.** If the shell exits, the session sits idle for over 6 hours, or the 50-session cap forces an LRU eviction, the sessionId is *retained as a tombstone for 30 days*. Calling against a tombstoned id auto-respawns a fresh shell under the same id — same size, shell, working directory, scrollback and theme the session had — and returns a notice quoting the original termination reason. If the shell exited on its own, the notice includes the last screen it printed, which is usually the only clue to why.
-- **"Idle" means no tool calls *and* no output.** A dev server or long build that is still printing is not idle and won't be killed at the 6-hour mark; a shell sitting at its prompt is.
-- **The server cleans up after itself.** When the MCP client disconnects (stdin closes) or the process gets SIGINT/SIGTERM/SIGHUP, every shell is killed and every attach socket removed.
-- **`terminal_destroy` is a hard delete.** No tombstone — future calls against the id error with "Unknown sessionId."
-
-## Install
-
-You need Node ≥ 20.19 on macOS or Linux, and access to the [`computer-agent-labs/terminal-use`](https://github.com/computer-agent-labs/terminal-use) repo. Install globally from git in one shot:
+## Development
 
 ```bash
-npm install -g --install-links=true git+ssh://git@github.com/computer-agent-labs/terminal-use.git
-```
-
-That clones the repo, installs native dependencies (prebuilt binaries for macOS/Linux × arm/x64 — no toolchain required), and drops a `terminal-use` binary on your PATH. There is no separate build step: the bin shim registers [`tsx`](https://github.com/privatenumber/tsx) on startup and runs the TypeScript sources directly. Startup cost is around 50 ms per process.
-
-(The `--install-links=true` flag forces npm to hard-copy the package into the global install location. Without it, npm symlinks into its cache, which gets cleaned up later and breaks the bin.)
-
-Then register with Claude Code:
-
-```bash
-claude mcp add terminal-use --scope user -- terminal-use
-```
-
-Verify:
-
-```bash
-claude mcp list
-```
-
-You should see `terminal-use` listed. Start a fresh Claude Code session and your agent will have `terminal_create`, `terminal_type`, `terminal_screenshot`, `terminal_click`, etc.
-
-To update, re-run the same install command — npm replaces the global install with the latest from `main`.
-
-To uninstall: `npm uninstall -g terminal-use` and `claude mcp remove terminal-use`.
-
-**Windows is untested.** The native dependencies ship Windows binaries and the attach transport switches to a named pipe there, but nothing has been run on Windows; `terminal_wait` in particular falls back to its output-quiet heuristic.
-
-### Local development install
-
-Working on the code itself (cloned the repo directly)?
-
-```bash
+git clone https://github.com/computer-agent-labs/terminal-use.git
+cd terminal-use
 yarn install
+yarn build      # compile src/ to dist/
+yarn test       # build, then run the full suite
+```
+
+Other scripts:
+
+```bash
+yarn dev            # run the server straight from source
+yarn lint           # eslint
+yarn typecheck      # tsc, no output
+yarn test:unit      # unit tests only
+yarn smoke          # quick end-to-end check without an MCP client
+```
+
+To point your MCP client at a local checkout, build it and use the path to the bin script:
+
+```bash
 claude mcp add terminal-use --scope user -- node "$PWD/bin/terminal-use.js"
 ```
 
-No build step needed — the bin shim checks the Node version, picks up tsx from `node_modules` and runs sources in-place. `yarn build` is still available for typecheck-then-emit if you want it, but nothing runs from `build/`.
+The code is laid out by layer: `src/pty` (spawning, key and mouse encoding), `src/emulator` (the xterm buffer, rendering, waiting), `src/session` (one terminal), `src/attach` (the socket you attach through) and `src/mcp` (the tools).
 
-## Develop
+## Contributing
 
-```bash
-yarn dev               # run server with tsx, no build
-yarn start             # run server through the bin shim, as an install would
-yarn typecheck         # tsc --noEmit
-yarn lint              # eslint
-yarn test              # full vitest suite
-yarn test:unit         # unit tests only
-yarn smoke             # hand-runnable end-to-end (no MCP client)
-```
+Issues and pull requests are welcome. For anything larger than a small fix, opening an issue first to talk it through saves everyone time. Please run `yarn lint` and `yarn test` before sending a pull request, and add a test for behavior you change.
 
 ## License
 
-[MIT](LICENSE). The bundled JetBrains Mono fonts are under the SIL Open Font License (`fonts/OFL.txt`).
+[MIT](LICENSE). The bundled JetBrains Mono fonts are licensed under the [SIL Open Font License](fonts/OFL.txt).
