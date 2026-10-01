@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import type {SettleResult} from '../../emulator/settle.js'
 import type {BufferState} from '../../emulator/terminal.js'
-import type {ReadWindow} from '../../session/TerminalSession.js'
+import type {CursorInText, ReadWindow, TerminalSession} from '../../session/TerminalSession.js'
 import type {SessionDescriptor, TombstoneDescriptor} from '../McpContext.js'
 import type {McpResponse} from '../McpResponse.js'
 
@@ -56,20 +56,31 @@ export function appendSettleNote(
 
 export function appendBufferState(response: McpResponse, state: BufferState): void {
   const altNote = state.isAlt ? ' (alt buffer active)' : ''
+  const hiddenNote = state.cursorHidden ? ' (hidden)' : ''
   response.appendLine(
-    `Terminal: ${state.cols}x${state.rows}${altNote}, cursor at row=${state.cursorRow} col=${state.cursorCol}, ` +
+    `Terminal: ${state.cols}x${state.rows}${altNote}, cursor at row=${state.cursorRow} col=${state.cursorCol}${hiddenNote}, ` +
       `buffer length ${state.bufferLength}, viewport rows ${state.viewportStart}..${state.viewportEnd}.`
   )
 }
 
 export const CURSOR_MARKER = '▌'
+/** COMBINING LOW LINE: underlines the preceding character, zero width. */
+export const CURSOR_UNDERLINE = '\u0332'
 
-export function markCursor(line: string, col: number, marker = CURSOR_MARKER): string {
-  if (col <= line.length) {
-    if (col === line.length) return line + marker
-    return line.slice(0, col) + marker + line.slice(col + 1)
+/**
+ * Mark the cursor in `line` without moving or hiding anything:
+ *  - on an empty cell, the block marker takes the place of the blank;
+ *  - on a character, that character is kept and underlined with a
+ *    zero-width combining mark.
+ * Either way every other character stays in its column.
+ */
+export function markCursor(line: string, cursor: CursorInText): string {
+  const {index, length} = cursor
+  if (length > 0 && index < line.length) {
+    return line.slice(0, index + length) + CURSOR_UNDERLINE + line.slice(index + length)
   }
-  return line + ' '.repeat(col - line.length) + marker
+  if (index >= line.length) return line + ' '.repeat(index - line.length) + CURSOR_MARKER
+  return line.slice(0, index) + CURSOR_MARKER + line.slice(index + 1)
 }
 
 export function renderReadWindow(
@@ -77,15 +88,18 @@ export function renderReadWindow(
   win: ReadWindow,
   options: {showCursor?: boolean} = {}
 ): void {
-  const showCursor = options.showCursor ?? true
+  // A program that hid the cursor (most full-screen TUIs) isn't showing one
+  // to a human either, so don't draw a marker into its layout.
+  const showCursor = (options.showCursor ?? true) && !win.state.cursorHidden
   const lines = [...win.text]
   if (showCursor) {
     const cursorRowInWindow = win.state.cursorRow - win.window.start
     if (cursorRowInWindow >= 0 && cursorRowInWindow < lines.length) {
-      lines[cursorRowInWindow] = markCursor(lines[cursorRowInWindow]!, win.state.cursorCol)
-    } else if (cursorRowInWindow === lines.length && win.state.cursorRow <= win.window.end) {
+      lines[cursorRowInWindow] = markCursor(lines[cursorRowInWindow]!, win.cursor)
+    } else if (cursorRowInWindow >= lines.length && win.state.cursorRow <= win.window.end) {
       // cursor row exists in the window but trailing-blank trimming dropped it
-      lines.push(markCursor('', win.state.cursorCol))
+      while (lines.length < cursorRowInWindow) lines.push('')
+      lines.push(markCursor('', win.cursor))
     }
   }
   if (lines.length === 0) {
@@ -94,7 +108,7 @@ export function renderReadWindow(
   }
   response.appendLine(
     `Showing rows ${win.window.start}..${win.window.end} (page ${win.window.page + 1} of ${win.window.totalPages}, ` +
-      `${win.window.rows} rows per page${showCursor ? `; cursor marked with "${CURSOR_MARKER}"` : ''}):`
+      `${win.window.rows} rows per page${showCursor ? `; cursor marked with "${CURSOR_MARKER}", or by underlining the character it is on` : ''}):`
   )
   response.appendLine('---')
   for (const line of lines) {

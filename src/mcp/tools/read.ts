@@ -38,7 +38,9 @@ export const read = defineTool({
       .boolean()
       .optional()
       .describe(
-        'When true (default), inject "▌" at the cursor position inline in the rendered text. ' +
+        'When true (default), mark the cursor inline: "▌" if it is on an empty cell, otherwise the ' +
+          'character it is on is underlined with a combining low line (U+0332). Nothing is hidden and ' +
+          'no column shifts. Skipped automatically while the program has the cursor hidden. ' +
           'Set to false if you need the unmodified text.'
       )
   },
@@ -48,6 +50,7 @@ export const read = defineTool({
     const rows = request.params.rows ?? session.term.rows
     const page = request.params.page ?? 0
     const showCursor = request.params.cursor ?? true
+    await session.flush()
     const win = session.read(rows, page)
     appendBufferState(response, win.state)
     response.appendBlank()

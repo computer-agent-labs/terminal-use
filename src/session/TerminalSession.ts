@@ -1,8 +1,17 @@
+import {execFile} from 'node:child_process'
+
 import type {Terminal} from '@xterm/headless'
 
 import {windowMath, type Window} from '../emulator/pagination.js'
 import {ptyAsSource, waitSettled, type SettleOptions, type SettleResult} from '../emulator/settle.js'
-import {bufferState, createTerminal, type BufferState} from '../emulator/terminal.js'
+import {
+  bufferState,
+  createTerminal,
+  isSgrMouseEnabled,
+  resetTrackedModes,
+  serializeTerminal,
+  type BufferState
+} from '../emulator/terminal.js'
 import {keyToBytes} from '../pty/keys.js'
 import {leftClickSequence} from '../pty/mouse.js'
 import {defaultShell, spawnPty, type IPty} from '../pty/spawn.js'
@@ -25,7 +34,30 @@ export interface ReadWindow {
   text: string[]
   window: Window
   state: BufferState
+  /** Where the cursor falls in its line of `text`. */
+  cursor: CursorInText
 }
+
+export interface CursorInText {
+  /**
+   * String index of the cursor's cell within its line. Differs from
+   * `state.cursorCol` (a cell index) whenever the line holds wide or
+   * multi-code-unit characters to the left of the cursor.
+   */
+  index: number
+  /** Code units of the character under the cursor; 0 if the cell is blank. */
+  length: number
+}
+
+/**
+ * What currently owns the terminal's foreground:
+ *  - 'shell'   the session's shell itself — it is sitting at its prompt.
+ *  - 'command' a child of the shell (a running command or TUI).
+ *  - 'unknown' could not be determined (Windows, no `ps`, shell gone).
+ */
+export type ForegroundState = 'shell' | 'command' | 'unknown'
+
+const FLUSH_CAP_MS = 500
 
 export class TerminalSession {
   #pty!: IPty
@@ -267,8 +299,10 @@ export class TerminalSession {
     const buf = this.#term.buffer.active
     const win = windowMath(buf.length, page, rows)
     const text: string[] = []
+    const state = bufferState(this.#term)
+    const cursor = this.#cursorInText()
     if (buf.length === 0 || win.end < win.start) {
-      return {text, window: win, state: bufferState(this.#term)}
+      return {text, window: win, state, cursor}
     }
     for (let y = win.start; y <= win.end; y++) {
       const line = buf.getLine(y)
@@ -277,7 +311,62 @@ export class TerminalSession {
     while (text.length > 0 && text[text.length - 1] === '') {
       text.pop()
     }
-    return {text, window: win, state: bufferState(this.#term)}
+    return {text, window: win, state, cursor}
+  }
+
+  /** Map the cursor's cell column onto its translated line. */
+  #cursorInText(): CursorInText {
+    const buf = this.#term.buffer.active
+    const line = buf.getLine(buf.baseY + buf.cursorY)
+    if (!line) return {index: buf.cursorX, length: 0}
+    // On the trailing half of a wide character, the character it belongs
+    // to starts one cell earlier.
+    let col = buf.cursorX
+    while (col > 0 && line.getCell(col)?.getWidth() === 0) col--
+    let index = 0
+    for (let x = 0; x < col; x++) {
+      const cell = line.getCell(x)
+      if (!cell) {
+        index++
+        continue
+      }
+      // Width-0 cells are the trailing half of a wide character and emit
+      // nothing; empty cells emit a single space.
+      if (cell.getWidth() === 0) continue
+      index += cell.getChars().length || 1
+    }
+    const chars = line.getCell(col)?.getChars() ?? ''
+    return {index, length: chars.trim() === '' ? 0 : chars.length}
+  }
+
+  /**
+   * Escape-sequence replay of the current screen plus up to `scrollback`
+   * lines of history — what a newly attached client needs to catch up.
+   */
+  serialize(scrollback: number): string {
+    this.#assertAlive()
+    return serializeTerminal(this.#term, scrollback)
+  }
+
+  /**
+   * Ask the kernel which process group owns the pty's foreground. An
+   * interactive shell puts each command in its own process group and hands
+   * it the terminal, then takes it back when the command finishes — so
+   * "foreground group == the shell's group" means the shell is at its
+   * prompt. No shell integration or prompt parsing needed.
+   */
+  foreground(): Promise<ForegroundState> {
+    if (this.#disposed || this.#exited || process.platform === 'win32') {
+      return Promise.resolve('unknown')
+    }
+    return new Promise(resolve => {
+      execFile('ps', ['-o', 'tpgid=,pgid=', '-p', String(this.#pty.pid)], (err, stdout) => {
+        if (err) return resolve('unknown')
+        const [tpgid, pgid] = stdout.trim().split(/\s+/).map(n => Number.parseInt(n, 10))
+        if (!tpgid || !pgid || tpgid < 1) return resolve('unknown')
+        resolve(tpgid === pgid ? 'shell' : 'command')
+      })
+    })
   }
 
   state(): BufferState {

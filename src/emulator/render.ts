@@ -6,6 +6,7 @@ import {createCanvas, GlobalFonts} from '@napi-rs/canvas'
 import type {Terminal} from '@xterm/headless'
 
 import {DARK_PLUS, resolveCellColors, type ThemeColors} from './palette.js'
+import {isCursorHidden} from './terminal.js'
 
 const FONT_FAMILY = 'JBMono'
 const FONT_FAMILY_BOLD = 'JBMonoBold'
@@ -244,7 +245,8 @@ export function renderToPng(term: Terminal, options: RenderOptions = {}): Render
     }
   }
 
-  if (drawCursor && page === 0) {
+  // Honor DECTCEM: a TUI that hid the cursor shouldn't get a stray block.
+  if (drawCursor && page === 0 && !isCursorHidden(term)) {
     const cursorRowAbs = buf.baseY + buf.cursorY
     if (cursorRowAbs >= start && cursorRowAbs <= end) {
       const cursorRowInWindow = cursorRowAbs - start

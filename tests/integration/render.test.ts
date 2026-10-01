@@ -6,6 +6,19 @@ import {createTerminal, writeAndFlush} from '../../src/emulator/terminal.js'
 const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 describe('renderToPng', () => {
+  it('draws no cursor block while the program has the cursor hidden', async () => {
+    const term = createTerminal({cols: 20, rows: 4})
+    await writeAndFlush(term, 'abc')
+    const visible = renderToPng(term).buffer
+    const noCursor = renderToPng(term, {drawCursor: false}).buffer
+    expect(visible.equals(noCursor)).toBe(false)
+    await writeAndFlush(term, '\x1b[?25l')
+    expect(renderToPng(term).buffer.equals(noCursor)).toBe(true)
+    await writeAndFlush(term, '\x1b[?25h')
+    expect(renderToPng(term).buffer.equals(visible)).toBe(true)
+    term.dispose()
+  })
+
   it('emits a valid PNG', async () => {
     const term = createTerminal({cols: 40, rows: 10})
     await writeAndFlush(term, 'hello render\r\n')
