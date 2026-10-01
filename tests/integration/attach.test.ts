@@ -91,7 +91,15 @@ function makeServerSession(): {server: AttachServer; session: TerminalSession; u
 describe('AttachServer over a Unix socket', () => {
   it('replays the current screen to a client that attaches late', async () => {
     const {server, session} = makeServerSession()
+    await session.waitForReady()
     await session.writeText('echo before-att""ach\n', {idleMs: 250, maxWaitMs: 3000})
+    // Make sure the output is really on screen before attaching, however
+    // slow the shell is under a loaded test run.
+    for (let i = 0; i < 50 && !session.read(24, 0).text.includes('before-attach'); i++) {
+      await waitMs(100)
+      await session.flush()
+    }
+    await waitMs(300)
     // Nothing further is printed after this point: without a replay the
     // client would see an empty terminal.
     const c = await connectClient(server.socketPath)
