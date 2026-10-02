@@ -51,8 +51,9 @@ export const wait = defineTool({
       .optional()
       .describe(
         'JavaScript regular expression matched against the screen text, lines joined with "\\n" ' +
-          '(e.g. "Listening on .*:3000", "^\\\\$ $", "(?i)error"). `^` and `$` match at the start and end of ' +
-          'each line. Omit to wait for command completion.'
+          '(e.g. "Listening on .*:3000", "^>>>\\\\s*$", "(?i)error"). `^` and `$` match at the start and end of ' +
+          'each line; trailing spaces are trimmed from screen lines, so do not match a space after a prompt. ' +
+          'Omit to wait for command completion.'
       ),
     until: z
       .enum(['command', 'quiet'])

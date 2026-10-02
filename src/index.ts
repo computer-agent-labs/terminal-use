@@ -4,6 +4,7 @@ import {z} from 'zod'
 import {McpContext, type ContextOptions, type RespawnReason} from './mcp/McpContext.js'
 import {McpResponse} from './mcp/McpResponse.js'
 import {Mutex} from './mcp/Mutex.js'
+import {loadSkills, registerSkills, SKILLS_EXTENSION} from './mcp/skills.js'
 import {TOOLS} from './mcp/tools/index.js'
 import {describeExit} from './mcp/tools/shared.js'
 import {VERSION} from './version.js'
@@ -53,7 +54,9 @@ const INSTRUCTIONS = [
     'terminal_batch call instead of one call per key. Use terminal_type with `paste: true` for multi-line text.',
   'If a call reports that the session was respawned (shell exited, idle, evicted), the command you sent was ' +
     'NOT run: a fresh shell is waiting, so re-issue it if still wanted.',
-  'Call terminal_destroy when you are finished with a session.'
+  'Call terminal_destroy when you are finished with a session.',
+  'A fuller guide with worked recipes (vim, pagers, REPLs, menus, ssh prompts, testing a TUI) is published as ' +
+    'the `terminal-use` skill at skill://terminal-use/SKILL.md, for hosts that load skills from MCP servers.'
 ].join('\n')
 
 const PROGRESS_INTERVAL_FLOOR_MS = 1000
@@ -76,6 +79,9 @@ export function createTerminalUse(options: CreateOptions = {}): TerminalUse {
   // addressed the way the spec prescribes — by an explicit handle
   // (`sessionId`) passed as an ordinary tool argument.
   const context = new McpContext(options)
+  // Read and hashed once: the files ship with the package, and every server
+  // instance must publish the same digests for the same bytes.
+  const skills = loadSkills()
   // One lock per session: calls against the same terminal stay strictly
   // ordered, but a slow settle or wait on one session never blocks another.
   const locks = new Map<number, Mutex>()
@@ -148,8 +154,15 @@ export function createTerminalUse(options: CreateOptions = {}): TerminalUse {
         title: 'terminal-use',
         version: VERSION
       },
-      {capabilities: {tools: {}}, instructions: INSTRUCTIONS}
+      {
+        capabilities: {
+          tools: {},
+          ...(skills.length > 0 ? {resources: {}, extensions: {[SKILLS_EXTENSION]: {}}} : {})
+        },
+        instructions: INSTRUCTIONS
+      }
     )
+    if (skills.length > 0) registerSkills(server, skills)
     // TOOLS is sorted by name: tools/list order is deterministic, which
     // the spec asks for so clients (and prompt caches) can rely on it.
     for (const tool of TOOLS) {

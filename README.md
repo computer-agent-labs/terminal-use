@@ -70,6 +70,19 @@ Every tool except `terminal_create` and `terminal_list` takes the `sessionId` th
 | `terminal_resize` | Change the terminal size. |
 | `terminal_reset` | Clear the screen and scrollback, or restart the shell with `hardReset: true`. |
 
+## The skill
+
+terminal-use comes with an [Agent Skill](https://agentskills.io): a short guide for the agent on how to use these tools well — when to use a command session, how to wait, how to read what is selected — plus recipes for vim, pagers, REPLs, menu-driven programs, ssh prompts and end-to-end testing of a TUI. It lives in [`skills/terminal-use`](skills/terminal-use).
+
+- **Hosts that load skills from MCP servers** get it automatically. The server implements the MCP Skills extension (`io.modelcontextprotocol/skills`): the skill is listed by `skills/list` and its files are served as `skill://terminal-use/...` resources. Few hosts support this yet.
+- **Hosts that load skills from disk** can install the same files. For Claude Code:
+
+  ```bash
+  cp -r "$(npx -y terminal-use skills-dir)/terminal-use" ~/.claude/skills/
+  ```
+
+The skill is optional. Without it the agent still has the tool descriptions and the server's built-in instructions.
+
 ## Shell sessions and command sessions
 
 By default a session is an interactive shell: type commands into it as you would at a prompt.
@@ -203,7 +216,7 @@ Actions are `type`, `paste`, `press`, `click`, `scroll` and `wait` (a fixed `ms`
 
 Built on the official MCP TypeScript SDK (v2). Over stdio it speaks both the 2026-07-28 revision of the protocol, which is stateless, and the earlier handshake-based revisions; the client's first message decides which.
 
-Stateless refers to the protocol, not the terminals: sessions live in the server process and are addressed by the `sessionId` you pass on each call. The server also provides usage instructions, titles and behavior hints for each tool, cancellation, and progress updates from `terminal_wait`.
+Stateless refers to the protocol, not the terminals: sessions live in the server process and are addressed by the `sessionId` you pass on each call. The server also provides usage instructions, titles and behavior hints for each tool, cancellation, progress updates from `terminal_wait`, and the Skills extension described above.
 
 ## Platform support
 
@@ -241,7 +254,7 @@ To point your MCP client at a local checkout, build it and use the path to the b
 claude mcp add terminal-use --scope user -- node "$PWD/bin/terminal-use.js"
 ```
 
-The code is laid out by layer: `src/pty` (spawning, key and mouse encoding), `src/emulator` (the xterm buffer, rendering, waiting), `src/session` (one terminal), `src/attach` (the socket you attach through) and `src/mcp` (the tools).
+The code is laid out by layer: `src/pty` (spawning, key and mouse encoding), `src/emulator` (the xterm buffer, rendering, waiting), `src/session` (one terminal), `src/attach` (the socket you attach through) and `src/mcp` (the tools). The agent skill is in `skills/`.
 
 ## Contributing
 

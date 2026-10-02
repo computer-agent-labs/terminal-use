@@ -4,6 +4,7 @@ import {serveStdio} from '@modelcontextprotocol/server/stdio'
 
 import {runAttachClient} from '../attach/client.js'
 import {createTerminalUse, type CreateOptions} from '../index.js'
+import {defaultSkillsDir} from '../mcp/skills.js'
 import {VERSION} from '../version.js'
 
 function intArg(value: string | undefined, name: string): number | undefined {
@@ -24,6 +25,7 @@ function printUsage(): void {
       'Usage:',
       '  terminal-use [options]                    Run as an MCP server over stdio',
       '  terminal-use attach <id> [--resize]       Attach to a running session',
+      '  terminal-use skills-dir                   Print where the bundled agent skill lives',
       '',
       'Server options:',
       '  --shell <path>      Shell to spawn (default: $SHELL or /bin/bash)',
@@ -44,6 +46,13 @@ const argv = process.argv.slice(2)
 // we run as an MCP server with the usual flag set.
 if (argv[0] === 'attach') {
   await runAttachClient(argv.slice(1))
+  process.exit(0)
+}
+
+// `terminal-use skills-dir` prints the directory holding the bundled Agent Skill,
+// for hosts that load skills from disk rather than from the MCP server.
+if (argv[0] === 'skills-dir') {
+  console.log(defaultSkillsDir())
   process.exit(0)
 }
 
