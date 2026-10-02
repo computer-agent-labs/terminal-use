@@ -115,7 +115,7 @@ export const wait = defineTool({
         }
         if (regex) {
           const rows = Math.min(1000, session.term.rows + PATTERN_SCROLLBACK_ROWS)
-          if (regex.test(session.read(rows, 0).text.join('\n'))) {
+          if (regex.test(session.read(rows, 0, {highlights: false}).text.join('\n'))) {
             outcome = 'done'
             break
           }

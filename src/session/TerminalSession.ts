@@ -2,6 +2,7 @@ import {execFile} from 'node:child_process'
 
 import type {Terminal} from '@xterm/headless'
 
+import {findHighlights, type Highlights} from '../emulator/highlights.js'
 import {windowMath, type Window} from '../emulator/pagination.js'
 import {ptyAsSource, waitSettled, type SettleOptions, type SettleResult} from '../emulator/settle.js'
 import {
@@ -36,13 +37,30 @@ export interface ReadWindow {
   state: BufferState
   /** Where the cursor falls in its line of `text`. */
   cursor: CursorInText
+  /** Index into `text` of the line holding the cursor; -1 if it is outside the window. */
+  cursorLine: number
+  /** How many soft-wrapped rows were joined onto the line before them. */
+  joined: number
+  /** Text the program is drawing attention to; absent if not asked for. */
+  highlights?: Highlights
+}
+
+export interface ReadOptions {
+  /**
+   * Join rows the terminal soft-wrapped at its right edge back into the
+   * single line the program printed. Default true.
+   */
+  joinWrapped?: boolean
+  /** Report highlighted (reverse-video / background-colored) text on the screen. Default true. */
+  highlights?: boolean
 }
 
 export interface CursorInText {
   /**
    * String index of the cursor's cell within its line. Differs from
    * `state.cursorCol` (a cell index) whenever the line holds wide or
-   * multi-code-unit characters to the left of the cursor.
+   * multi-code-unit characters to the left of the cursor, or earlier
+   * soft-wrapped rows were joined in front of it.
    */
   index: number
   /** Code units of the character under the cursor; 0 if the cell is blank. */
@@ -338,28 +356,52 @@ export class TerminalSession {
     oldTerm.dispose()
   }
 
-  read(rows: number, page: number): ReadWindow {
+  read(rows: number, page: number, options: ReadOptions = {}): ReadWindow {
     this.#assertAlive()
+    const joinWrapped = options.joinWrapped ?? true
     const buf = this.#term.buffer.active
     const win = windowMath(buf.length, page, rows)
     const text: string[] = []
     const state = bufferState(this.#term)
-    const cursor = this.#cursorInText()
-    if (buf.length === 0 || win.end < win.start) {
-      return {text, window: win, state, cursor}
-    }
+    const empty: ReadWindow = {text, window: win, state, cursor: {index: 0, length: 0}, cursorLine: -1, joined: 0}
+    if (buf.length === 0 || win.end < win.start) return empty
+
+    const cursorRow = state.cursorRow
+    const inRow = this.#cursorInRow()
+    let cursor: CursorInText = {index: 0, length: 0}
+    let cursorLine = -1
+    let joined = 0
     for (let y = win.start; y <= win.end; y++) {
-      const line = buf.getLine(y)
-      text.push(line ? line.translateToString(true) : '')
+      // A row whose successor is flagged as wrapped is the first part of one
+      // long line the terminal broke at its right edge. Stitch the parts
+      // back together so the reader sees the line the program printed.
+      let line = ''
+      for (;;) {
+        const continues = joinWrapped && y < win.end && buf.getLine(y + 1)?.isWrapped === true
+        // Keep trailing blanks on every part but the last: they are real
+        // columns, and dropping them would glue words together.
+        const part = buf.getLine(y)?.translateToString(!continues) ?? ''
+        if (y === cursorRow) {
+          cursor = {index: line.length + inRow.index, length: inRow.length}
+          cursorLine = text.length
+        }
+        line += part
+        if (!continues) break
+        joined++
+        y++
+      }
+      text.push(line)
     }
-    while (text.length > 0 && text[text.length - 1] === '') {
+    while (text.length > 0 && text[text.length - 1] === '' && text.length - 1 !== cursorLine) {
       text.pop()
     }
-    return {text, window: win, state, cursor}
+    const highlights =
+      options.highlights === false ? undefined : findHighlights(this.#term, win.start, win.end)
+    return {text, window: win, state, cursor, cursorLine, joined, highlights}
   }
 
-  /** Map the cursor's cell column onto its translated line. */
-  #cursorInText(): CursorInText {
+  /** Map the cursor's cell column onto its row's translated text. */
+  #cursorInRow(): CursorInText {
     const buf = this.#term.buffer.active
     const line = buf.getLine(buf.baseY + buf.cursorY)
     if (!line) return {index: buf.cursorX, length: 0}

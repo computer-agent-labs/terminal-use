@@ -88,7 +88,7 @@ export function markCursor(line: string, cursor: CursorInText): string {
 
 /** Says which character the marker sits in front of, so there is no doubt. */
 function describeCursor(win: ReadWindow): string {
-  const line = win.text[win.state.cursorRow - win.window.start] ?? ''
+  const line = win.text[win.cursorLine] ?? ''
   const {index, length} = win.cursor
   if (length === 0 || index >= line.length) return `cursor marked with "${CURSOR_MARKER}"`
   return (
@@ -104,29 +104,54 @@ export function renderReadWindow(
 ): void {
   // A program that hid the cursor (most full-screen TUIs) isn't showing one
   // to a human either, so don't draw a marker into its layout.
-  const showCursor = (options.showCursor ?? true) && !win.state.cursorHidden
+  const showCursor = (options.showCursor ?? true) && !win.state.cursorHidden && win.cursorLine >= 0
   const lines = [...win.text]
   if (showCursor) {
-    const cursorRowInWindow = win.state.cursorRow - win.window.start
-    if (cursorRowInWindow >= 0 && cursorRowInWindow < lines.length) {
-      lines[cursorRowInWindow] = markCursor(lines[cursorRowInWindow]!, win.cursor)
-    } else if (cursorRowInWindow >= lines.length && win.state.cursorRow <= win.window.end) {
-      // cursor row exists in the window but trailing-blank trimming dropped it
-      while (lines.length < cursorRowInWindow) lines.push('')
-      lines.push(markCursor('', win.cursor))
-    }
+    lines[win.cursorLine] = markCursor(lines[win.cursorLine] ?? '', win.cursor)
+  } else if (win.cursorLine >= 0) {
+    // The cursor's own line was only kept for the marker; without one,
+    // trailing blank lines go like any others.
+    while (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
   }
   if (lines.length === 0) {
     response.appendLine('(empty buffer)')
     return
   }
+  const notes = [`${win.window.rows} rows per page`]
+  if (win.joined > 0) {
+    notes.push(`${win.joined} soft-wrapped row${win.joined === 1 ? '' : 's'} joined to the line above`)
+  }
+  if (showCursor) notes.push(describeCursor(win))
   response.appendLine(
     `Showing rows ${win.window.start}..${win.window.end} (page ${win.window.page + 1} of ${win.window.totalPages}, ` +
-      `${win.window.rows} rows per page${showCursor ? `; ${describeCursor(win)}` : ''}):`
+      `${notes.join('; ')}):`
   )
   response.appendLine('---')
   for (const line of lines) {
     response.appendLine(line)
   }
   response.appendLine('---')
+  appendHighlights(response, win)
+}
+
+/**
+ * Plain text can't show which entry of a menu is selected; say it in words.
+ * Rows and columns are the ones terminal_click takes.
+ */
+function appendHighlights(response: McpResponse, win: ReadWindow): void {
+  const h = win.highlights
+  if (!h) return
+  if (h.dense) {
+    response.appendLine(
+      'Much of this screen is drawn on colored backgrounds, so highlights are not listed — use ' +
+        'terminal_screenshot to see what is selected.'
+    )
+    return
+  }
+  if (h.spans.length === 0) return
+  response.appendLine('Highlighted on screen (reverse video or background color; screen row, columns):')
+  for (const s of h.spans) {
+    response.appendLine(`  row ${s.row}, cols ${s.startCol}-${s.endCol}: ${JSON.stringify(s.text)}`)
+  }
+  if (h.omitted > 0) response.appendLine(`  …and ${h.omitted} more.`)
 }

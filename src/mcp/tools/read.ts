@@ -35,6 +35,21 @@ export const read = defineTool({
       .describe(
         '0 = newest screen-sized window. N = scroll up N pages (each page = `rows` lines). Past-top clamps.'
       ),
+    joinWrapped: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true (default), rows the terminal soft-wrapped at its right edge are joined back into the ' +
+          'single long line the program printed. Set to false to get one line per screen row.'
+      ),
+    highlights: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true (default), list text on the current screen that is drawn in reverse video or on a ' +
+          'background color — how TUIs show the selected menu entry, tab or button — with its screen row ' +
+          'and columns. Plain text cannot show this otherwise.'
+      ),
     cursor: z
       .boolean()
       .optional()
@@ -53,7 +68,10 @@ export const read = defineTool({
     const page = request.params.page ?? 0
     const showCursor = request.params.cursor ?? true
     await session.flush()
-    const win = session.read(rows, page)
+    const win = session.read(rows, page, {
+      joinWrapped: request.params.joinWrapped,
+      highlights: request.params.highlights
+    })
     appendBufferState(response, win.state)
     response.appendBlank()
     renderReadWindow(response, win, {showCursor})
