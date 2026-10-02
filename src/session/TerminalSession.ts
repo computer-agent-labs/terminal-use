@@ -76,6 +76,8 @@ export interface CursorInText {
 export type ForegroundState = 'shell' | 'command' | 'unknown'
 
 const FLUSH_CAP_MS = 500
+const PASTE_START = '\x1b[200~'
+const PASTE_END = '\x1b[201~'
 
 export class TerminalSession {
   #pty!: IPty
@@ -272,6 +274,26 @@ export class TerminalSession {
     const result = await settler
     await this.flush()
     return result
+  }
+
+  /**
+   * Deliver `text` as one paste rather than as keystrokes. Programs that
+   * asked for bracketed paste (editors, REPLs, modern shells) get it wrapped
+   * in the paste markers, so they insert it verbatim — no auto-indent, no
+   * running each line as it arrives. Others get the plain characters, which
+   * is all a real terminal would send them too.
+   */
+  async paste(text: string, settle: SettleOptions): Promise<SettleResult & {bracketed: boolean}> {
+    this.#assertAlive()
+    const bracketed = this.#term.modes.bracketedPasteMode
+    // The end marker inside the payload would close the paste early and let
+    // the rest through as live keystrokes.
+    const body = text.replace(/\r\n|\n/g, '\r').replaceAll(PASTE_END, '')
+    const settler = waitSettled(ptyAsSource(this.#pty), settle)
+    this.#pty.write(bracketed ? PASTE_START + body + PASTE_END : body)
+    const result = await settler
+    await this.flush()
+    return {...result, bracketed}
   }
 
   async pressKey(spec: string, count: number, settle: SettleOptions): Promise<SettleResult> {

@@ -23,6 +23,15 @@ export const typeText = defineTool({
   schema: {
     sessionId: requiredSessionIdField,
     text: z.string().describe('Characters to type. Embedded \\n becomes Enter.'),
+    paste: z
+      .boolean()
+      .optional()
+      .describe(
+        'Deliver the text as a single paste instead of keystrokes. Use it for multi-line text going into ' +
+          'an editor, a REPL or a shell prompt: programs that support bracketed paste insert it verbatim ' +
+          '(no auto-indent, lines are not run one by one), and nothing is submitted until you press Enter. ' +
+          'Programs that do not support it receive the plain characters. Default false.'
+      ),
     idleMs: z
       .number()
       .int()
@@ -44,9 +53,20 @@ export const typeText = defineTool({
     const idleMs = request.params.idleMs ?? 200
     const maxWaitMs = request.params.maxWaitMs ?? 5000
     const session = context.session()
-    const result = await session.writeText(request.params.text, {idleMs, maxWaitMs})
-    response.appendLine(`Typed ${request.params.text.length} chars.`)
-    appendSettleNote(response, result)
+    if (request.params.paste) {
+      const pasted = await session.paste(request.params.text, {idleMs, maxWaitMs})
+      response.appendLine(
+        pasted.bracketed
+          ? `Pasted ${request.params.text.length} chars as a bracketed paste.`
+          : `Pasted ${request.params.text.length} chars as plain input (the program has not enabled ` +
+            'bracketed paste, so each newline acted as Enter).'
+      )
+      appendSettleNote(response, pasted)
+    } else {
+      const result = await session.writeText(request.params.text, {idleMs, maxWaitMs})
+      response.appendLine(`Typed ${request.params.text.length} chars.`)
+      appendSettleNote(response, result)
+    }
     // The shell can exit during settle (e.g. agent typed `exit`). When that
     // happens, McpContext's pty.onExit listener disposes the session
     // synchronously, and any further access to session.state()/.read()
