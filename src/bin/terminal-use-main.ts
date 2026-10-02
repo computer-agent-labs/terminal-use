@@ -31,6 +31,7 @@ function printUsage(): void {
       '  --cols <n>          Initial columns (default: 120)',
       '  --rows <n>          Initial rows (default: 30)',
       '  --scrollback <n>    Scrollback lines retained (default: 5000)',
+      '  --login             Start shells as login shells (reads ~/.zprofile etc.)',
       '  -h, --help          Show this help',
       '  -v, --version       Print the version'
     ].join('\n')
@@ -54,6 +55,7 @@ const parsed = parseArgs({
     cols: {type: 'string'},
     rows: {type: 'string'},
     scrollback: {type: 'string'},
+    login: {type: 'boolean'},
     help: {type: 'boolean', short: 'h'},
     version: {type: 'boolean', short: 'v'}
   },
@@ -77,7 +79,8 @@ const opts: CreateOptions = {
     cwd: parsed.values.cwd,
     cols: intArg(parsed.values.cols, 'cols'),
     rows: intArg(parsed.values.rows, 'rows'),
-    scrollback: intArg(parsed.values.scrollback, 'scrollback')
+    scrollback: intArg(parsed.values.scrollback, 'scrollback'),
+    login: parsed.values.login
   } as CreateOptions['defaults']
 }
 

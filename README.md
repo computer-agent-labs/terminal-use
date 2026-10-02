@@ -42,6 +42,13 @@ Server options go after the command: `npx -y terminal-use --cols 100 --rows 40`.
 | `--cwd <path>` | where the server was started | Working directory for new sessions |
 | `--cols <n>` / `--rows <n>` | `120` / `30` | Terminal size |
 | `--scrollback <n>` | `5000` | Lines of history kept |
+| `--login` | off | Start shells as login shells (see below) |
+
+### "command not found" inside a session
+
+If programs that work in your own terminal (`node`, `brew`, `pyenv`…) are missing inside a session, the server probably inherited a bare environment. That happens when the MCP client is started from the Dock or a launcher instead of a terminal: your `PATH` is set up by your shell's profile files (`~/.zprofile`, `~/.bash_profile`, `~/.profile`), and nothing has read them.
+
+A login shell reads those files. Turn it on for every session with the `--login` server flag, or for one session with `login: true` on `terminal_create`. It is off by default because it makes each shell slower to start and runs whatever your profile runs.
 
 ## Tools
 
@@ -49,7 +56,7 @@ Every tool except `terminal_create` and `terminal_list` takes the `sessionId` th
 
 | Tool | What it does |
 |---|---|
-| `terminal_create` | Start a session: an interactive shell, or one program with `command`. Optional `label`, `cols`, `rows`, `shell`, `cwd`, `env`, `scrollback`, `theme`. |
+| `terminal_create` | Start a session: an interactive shell, or one program with `command`. Optional `label`, `cols`, `rows`, `shell`, `cwd`, `env`, `login`, `scrollback`, `theme`. |
 | `terminal_list` | List sessions. |
 | `terminal_destroy` | End a session. |
 | `terminal_type` | Type text. `\n` presses Enter. `paste: true` sends it as one paste. |

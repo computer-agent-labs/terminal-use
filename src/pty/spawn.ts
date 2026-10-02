@@ -13,6 +13,12 @@ export interface SpawnOptions {
   command?: string
   /** Variables set on top of the server's own environment. */
   env?: Record<string, string>
+  /**
+   * Start the shell as a login shell (`-l`), so it reads the user's profile
+   * files (~/.zprofile, ~/.bash_profile, ~/.profile). That is where PATH is
+   * usually set up, and a server started from a GUI app never inherited it.
+   */
+  login?: boolean
 }
 
 export type IPty = nodePty.IPty
@@ -34,7 +40,10 @@ export function spawnPty(options: SpawnOptions): IPty {
 
   // `shell -c` rather than exec'ing the words ourselves: the caller gets
   // quoting, pipes, redirection and PATH lookup exactly as at a prompt.
-  const args = options.command === undefined ? [] : ['-c', options.command]
+  const args = [
+    ...(options.login ? ['-l'] : []),
+    ...(options.command === undefined ? [] : ['-c', options.command])
+  ]
   return nodePty.spawn(options.shell ?? defaultShell(), args, {
     name: 'xterm-256color',
     cols: options.cols,

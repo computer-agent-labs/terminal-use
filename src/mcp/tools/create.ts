@@ -57,6 +57,15 @@ export const create = defineTool({
           'the program directly. When it exits, its exit status is reported, the final screen stays ' +
           'readable, and nothing is restarted automatically.'
       ),
+    login: z
+      .boolean()
+      .optional()
+      .describe(
+        'Start the shell as a login shell (`-l`), so it reads the profile files (~/.zprofile, ' +
+          '~/.bash_profile, ~/.profile) where PATH is usually set up. Use it when tools that work in the ' +
+          "user's own terminal are \"command not found\" here — typical when the MCP client was started " +
+          'from a GUI rather than a terminal. Slower to start. Default false (or the server\'s --login flag).'
+      ),
     env: z
       .record(z.string(), z.string())
       .optional()
@@ -84,6 +93,7 @@ export const create = defineTool({
       scrollback: request.params.scrollback,
       command: request.params.command,
       env: request.params.env,
+      login: request.params.login,
       theme: request.params.theme as keyof typeof THEMES | undefined
     })
     response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)

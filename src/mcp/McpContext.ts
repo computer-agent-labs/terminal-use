@@ -10,6 +10,8 @@ export interface ContextDefaults {
   scrollback: number
   shell?: string
   cwd?: string
+  /** Start shells as login shells unless a session says otherwise. Default false. */
+  login?: boolean
 }
 
 export const DEFAULT_DEFAULTS: ContextDefaults = {
@@ -49,6 +51,7 @@ export interface CreateSessionOptions {
   theme?: ThemeName
   command?: string
   env?: Record<string, string>
+  login?: boolean
 }
 
 export interface SessionDescriptor {
@@ -132,7 +135,8 @@ export class McpContext {
       rows: options.defaults?.rows ?? DEFAULT_DEFAULTS.rows,
       scrollback: options.defaults?.scrollback ?? DEFAULT_DEFAULTS.scrollback,
       shell: options.defaults?.shell,
-      cwd: options.defaults?.cwd
+      cwd: options.defaults?.cwd,
+      login: options.defaults?.login
     }
     this.#maxSessions = options.maxSessions ?? DEFAULT_MAX_SESSIONS
     this.#idleKillMs = options.idleKillMs ?? DEFAULT_IDLE_KILL_MS
@@ -445,7 +449,8 @@ export class McpContext {
       shell: opts.shell ?? this.#defaults.shell,
       cwd: opts.cwd ?? this.#defaults.cwd,
       command: opts.command,
-      env: opts.env
+      env: opts.env,
+      login: opts.login ?? this.#defaults.login
     })
   }
 

@@ -33,6 +33,8 @@ export interface SessionConfig {
   command?: string
   /** Extra environment variables for the process. */
   env?: Record<string, string>
+  /** Start the shell as a login shell. */
+  login?: boolean
 }
 
 export interface ReadWindow {
@@ -103,7 +105,8 @@ export class TerminalSession {
       rows: config.rows,
       scrollback: config.scrollback ?? 5000,
       command: config.command,
-      env: config.env
+      env: config.env,
+      login: config.login ?? false
     }
     this.#spawn()
   }
@@ -121,7 +124,8 @@ export class TerminalSession {
       cols: this.#config.cols,
       rows: this.#config.rows,
       command: this.#config.command,
-      env: this.#config.env
+      env: this.#config.env,
+      login: this.#config.login
     })
     const myPty = this.#pty
     const myTerm = this.#term
