@@ -8,7 +8,7 @@ import {THEMES} from '../../emulator/palette.js'
 import {renderToPng} from '../../emulator/render.js'
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, requiredSessionIdField} from './shared.js'
+import {appendBufferState, appendExitNote, requiredSessionIdField} from './shared.js'
 
 const INLINE_LIMIT_BYTES = 2 * 1024 * 1024
 
@@ -37,6 +37,7 @@ export const screenshot = defineTool({
       .describe('Absolute path to write the PNG to. If unset, image is inlined as base64.')
   },
   annotations: {readOnlyHint: true, openWorldHint: false},
+  worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()
     const page = request.params.page ?? 0
@@ -45,6 +46,7 @@ export const screenshot = defineTool({
     await session.flush()
     const result = renderToPng(session.term, {page, theme})
 
+    appendExitNote(response, session)
     appendBufferState(response, session.state())
     response.appendBlank()
     response.appendLine(

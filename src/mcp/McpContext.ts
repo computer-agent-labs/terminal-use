@@ -47,6 +47,8 @@ export interface CreateSessionOptions {
   shell?: string
   cwd?: string
   theme?: ThemeName
+  command?: string
+  env?: Record<string, string>
 }
 
 export interface SessionDescriptor {
@@ -61,6 +63,10 @@ export interface SessionDescriptor {
   lastActivityAt: Date
   createdAt: Date
   theme: ThemeName
+  /** Set for sessions that run one command instead of a shell. */
+  command?: string
+  /** Set once that command has exited. */
+  exit?: ExitInfo
 }
 
 export interface TombstoneDescriptor {
@@ -190,6 +196,16 @@ export class McpContext {
    */
   async prepareForCall(sessionId: number): Promise<PrepareResult> {
     const tomb = this.#tombstones.get(sessionId)
+    if (tomb?.config.command !== undefined) {
+      // Never re-run a command on our own initiative.
+      this.#tombstones.delete(sessionId)
+      this.#closeAttach(sessionId)
+      const what = tomb.reason === 'evicted' ? 'evicted to make room for newer sessions' : 'closed after sitting idle'
+      throw new Error(
+        `Session ${sessionId}${tomb.label ? ` ("${tomb.label}")` : ''} ran \`${tomb.config.command}\` and was ${what} ` +
+          `at ${new Date(tomb.at).toISOString()}. It is gone and was not restarted — call terminal_create to run the command again.`
+      )
+    }
     if (tomb) {
       this.#tombstones.delete(sessionId)
       this.#enforceCapForRevival()
@@ -217,7 +233,7 @@ export class McpContext {
     // The shell is gone but its exit hasn't been turned into a tombstone
     // yet (the session holds exit listeners back until the emulator has
     // parsed the last output). Respawn in place.
-    if (rec.session.exited) {
+    if (rec.session.exited && !rec.session.isCommand) {
       const previousExit = rec.session.exited
       const finalScreen = rec.session.finalScreen
       rec.unsubscribeExit()
@@ -427,13 +443,19 @@ export class McpContext {
       rows: opts.rows ?? this.#defaults.rows,
       scrollback: opts.scrollback ?? this.#defaults.scrollback,
       shell: opts.shell ?? this.#defaults.shell,
-      cwd: opts.cwd ?? this.#defaults.cwd
+      cwd: opts.cwd ?? this.#defaults.cwd,
+      command: opts.command,
+      env: opts.env
     })
   }
 
   #handleSessionExit(id: number, info: ExitInfo): void {
     const rec = this.#sessions.get(id)
     if (!rec || rec.session.exited !== info) return
+    // A command session is simply finished. Keep it — screen, exit status
+    // and all — until the caller destroys it; respawning would mean running
+    // the command a second time without being asked.
+    if (rec.session.isCommand) return
     rec.unsubscribeExit()
     rec.unsubscribeData()
     try {
@@ -511,7 +533,9 @@ export class McpContext {
       isAlive: rec.session.isAlive,
       lastActivityAt: new Date(rec.lastActivityAt),
       createdAt: new Date(rec.createdAt),
-      theme: rec.theme
+      theme: rec.theme,
+      command: rec.session.config.command,
+      exit: rec.session.isCommand ? rec.session.exited : undefined
     }
   }
 }

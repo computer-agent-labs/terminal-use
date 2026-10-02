@@ -23,7 +23,8 @@ export const wait = defineTool({
     'DEFAULT (no `pattern`): waits for the running command to finish — i.e. for the shell to take the ' +
     "terminal's foreground back and its prompt to go quiet. This asks the kernel who owns the terminal, so " +
     'it works with any prompt and stays correct while a command is silent (`sleep 60`) or chatty. Returns ' +
-    'immediately if the shell is already at its prompt. Background jobs (`cmd &`) do not count as running, ' +
+    'immediately if the shell is already at its prompt. In a session created with `command`, it waits for ' +
+    'that command to exit and reports its exit status. Background jobs (`cmd &`) do not count as running, ' +
     'and inside a nested program (ssh, a REPL, a TUI) the outer shell never regains the foreground until ' +
     'that program exits — use `pattern` there.\n\n' +
     '`until: "quiet"`: waits until nothing has been printed for `quietMs` (default 1000), whatever owns the ' +
@@ -73,6 +74,7 @@ export const wait = defineTool({
       )
   },
   annotations: {readOnlyHint: true, openWorldHint: false},
+  worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()
     const timeoutMs = request.params.timeoutMs ?? 30000
@@ -124,6 +126,9 @@ export const wait = defineTool({
             outcome = 'done'
             break
           }
+        } else if (session.isCommand) {
+          // The session's process *is* the command: it is done when it
+          // exits, which the isAlive checks above catch.
         } else {
           const foreground = await session.foreground()
           const quietFor = Date.now() - lastOutputAt

@@ -29,6 +29,10 @@ export interface SessionConfig {
   cols: number
   rows: number
   scrollback?: number
+  /** Command line to run instead of an interactive shell. */
+  command?: string
+  /** Extra environment variables for the process. */
+  env?: Record<string, string>
 }
 
 export interface ReadWindow {
@@ -97,7 +101,9 @@ export class TerminalSession {
       cwd: config.cwd ?? process.cwd(),
       cols: config.cols,
       rows: config.rows,
-      scrollback: config.scrollback ?? 5000
+      scrollback: config.scrollback ?? 5000,
+      command: config.command,
+      env: config.env
     }
     this.#spawn()
   }
@@ -113,7 +119,9 @@ export class TerminalSession {
       shell: this.#config.shell,
       cwd: this.#config.cwd,
       cols: this.#config.cols,
-      rows: this.#config.rows
+      rows: this.#config.rows,
+      command: this.#config.command,
+      env: this.#config.env
     })
     const myPty = this.#pty
     const myTerm = this.#term
@@ -229,6 +237,15 @@ export class TerminalSession {
 
   get exited(): ExitInfo | undefined {
     return this.#exited
+  }
+
+  /**
+   * True when the session runs one command rather than an interactive
+   * shell. Such a session is finished once the command exits: its screen
+   * stays readable, but nothing respawns it behind the caller's back.
+   */
+  get isCommand(): boolean {
+    return this.#config.command !== undefined
   }
 
   get isAlive(): boolean {

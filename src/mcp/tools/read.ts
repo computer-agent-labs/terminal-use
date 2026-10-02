@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, renderReadWindow, requiredSessionIdField} from './shared.js'
+import {appendBufferState, appendExitNote, renderReadWindow, requiredSessionIdField} from './shared.js'
 
 export const READ_MAX_ROWS = 1000
 
@@ -62,6 +62,7 @@ export const read = defineTool({
       )
   },
   annotations: {readOnlyHint: true, openWorldHint: false},
+  worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()
     const rows = request.params.rows ?? session.term.rows
@@ -72,6 +73,7 @@ export const read = defineTool({
       joinWrapped: request.params.joinWrapped,
       highlights: request.params.highlights
     })
+    appendExitNote(response, session)
     appendBufferState(response, win.state)
     response.appendBlank()
     renderReadWindow(response, win, {showCursor})

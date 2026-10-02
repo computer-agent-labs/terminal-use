@@ -31,6 +31,12 @@ export interface ToolDefinition<Schema extends ZodRawShape = ZodRawShape> {
    * set this to false — they operate on the context, not on a session.
    */
   needsSession?: boolean
+  /**
+   * Whether the tool still makes sense once a command session's process has
+   * exited (reading its final screen, restarting it). Tools that send input
+   * leave this unset and are refused with the exit status instead.
+   */
+  worksAfterExit?: boolean
   handler: (
     request: {
       params: z.infer<z.ZodObject<Schema>>

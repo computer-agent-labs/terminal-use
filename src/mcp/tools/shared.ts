@@ -2,7 +2,7 @@ import {z} from 'zod'
 
 import type {SettleResult} from '../../emulator/settle.js'
 import type {BufferState} from '../../emulator/terminal.js'
-import type {CursorInText, ReadWindow, TerminalSession} from '../../session/TerminalSession.js'
+import type {CursorInText, ExitInfo, ReadWindow, TerminalSession} from '../../session/TerminalSession.js'
 import type {SessionDescriptor, TombstoneDescriptor} from '../McpContext.js'
 import type {McpResponse} from '../McpResponse.js'
 
@@ -15,10 +15,35 @@ export const requiredSessionIdField = z
       'Use terminal_list to enumerate currently-known ids.'
   )
 
+const SIGNAL_NAMES: Record<number, string> = {
+  1: 'SIGHUP',
+  2: 'SIGINT',
+  3: 'SIGQUIT',
+  6: 'SIGABRT',
+  9: 'SIGKILL',
+  11: 'SIGSEGV',
+  13: 'SIGPIPE',
+  14: 'SIGALRM',
+  15: 'SIGTERM'
+}
+
+/** "exit code 2" / "exit code 0, signal SIGTERM". node-pty reports signal 0 for a normal exit. */
+export function describeExit(exit: ExitInfo): string {
+  const parts = [`exit code ${exit.exitCode}`]
+  if (exit.signal) parts.push(`signal ${SIGNAL_NAMES[exit.signal] ?? exit.signal}`)
+  return parts.join(', ')
+}
+
 export function describeSessionLine(d: SessionDescriptor): string {
   const tag = d.label ? `${d.sessionId} ("${d.label}")` : `${d.sessionId}`
   const idleSecs = Math.round((Date.now() - d.lastActivityAt.getTime()) / 1000)
-  return `[${tag}] ${d.cols}x${d.rows} pid=${d.pid} shell=${d.shell || '?'} cwd=${d.cwd || '?'} theme=${d.theme} idle=${idleSecs}s`
+  const what =
+    d.command === undefined
+      ? `pid=${d.pid} shell=${d.shell || '?'}`
+      : d.exit
+        ? `EXITED (${describeExit(d.exit)}) command=${JSON.stringify(d.command)}`
+        : `pid=${d.pid} command=${JSON.stringify(d.command)}`
+  return `[${tag}] ${d.cols}x${d.rows} ${what} cwd=${d.cwd || '?'} theme=${d.theme} idle=${idleSecs}s`
 }
 
 export function describeTombstoneLine(t: TombstoneDescriptor): string {
@@ -44,9 +69,21 @@ export function appendSettleNote(response: McpResponse, result: SettleResult): v
   )
 }
 
-/** Shared tail for calls during which the shell went away. */
+/** Shared tail for calls during which the session's process went away. */
 export function appendShellExited(response: McpResponse, session: TerminalSession): void {
   const exit = session.exited
+  if (session.isCommand) {
+    // The emulator is kept for a finished command, so show its last screen
+    // the normal way.
+    response.appendLine(
+      `The command exited${exit ? ` (${describeExit(exit)})` : ''}. Its final screen is below and stays ` +
+        'readable with terminal_read / terminal_screenshot. terminal_reset with hardReset: true runs it ' +
+        'again; terminal_destroy removes the session.'
+    )
+    response.appendBlank()
+    renderReadWindow(response, session.read(session.term.rows, 0))
+    return
+  }
   response.appendLine(
     `The shell exited during this call${exit ? ` (exit code ${exit.exitCode})` : ''}. The next tool call ` +
       'against this sessionId will auto-respawn — re-issue your command if relevant.'
@@ -59,6 +96,15 @@ export function appendShellExited(response: McpResponse, session: TerminalSessio
     for (const line of screen) response.appendLine(line)
     response.appendLine('---')
   }
+}
+
+/** One line saying a command session is over, for tools that still work on it. */
+export function appendExitNote(response: McpResponse, session: TerminalSession): void {
+  const exit = session.exited
+  if (!session.isCommand || !exit) return
+  response.appendLine(
+    `The command exited (${describeExit(exit)}) at ${exit.at.toISOString()}; this is its final screen.`
+  )
 }
 
 export function appendBufferState(response: McpResponse, state: BufferState): void {

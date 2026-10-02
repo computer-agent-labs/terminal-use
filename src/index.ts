@@ -5,19 +5,8 @@ import {McpContext, type ContextOptions, type RespawnReason} from './mcp/McpCont
 import {McpResponse} from './mcp/McpResponse.js'
 import {Mutex} from './mcp/Mutex.js'
 import {TOOLS} from './mcp/tools/index.js'
+import {describeExit} from './mcp/tools/shared.js'
 import {VERSION} from './version.js'
-
-const SIGNAL_NAMES: Record<number, string> = {
-  1: 'SIGHUP',
-  2: 'SIGINT',
-  3: 'SIGQUIT',
-  6: 'SIGABRT',
-  9: 'SIGKILL',
-  11: 'SIGSEGV',
-  13: 'SIGPIPE',
-  14: 'SIGALRM',
-  15: 'SIGTERM'
-}
 
 function tag(sessionId: number, label?: string): string {
   return label ? `Session ${sessionId} ("${label}")` : `Session ${sessionId}`
@@ -30,14 +19,10 @@ function formatRespawnNotice(reason: RespawnReason, sessionId: number): string {
     "re-issue your command if it's still relevant."
   switch (reason.kind) {
     case 'shell-exit': {
-      const parts = [`exit code ${reason.exit.exitCode}`]
-      if (reason.exit.signal !== undefined) {
-        parts.push(`signal ${SIGNAL_NAMES[reason.exit.signal] ?? reason.exit.signal}`)
-      }
       const screen = reason.finalScreen?.length
         ? `\n\nLast screen before the shell exited:\n---\n${reason.finalScreen.join('\n')}\n---`
         : ''
-      return `${head}'s shell exited (${parts.join(', ')}) at ${reason.exit.at.toISOString()} between calls. ${tail}${screen}`
+      return `${head}'s shell exited (${describeExit(reason.exit)}) at ${reason.exit.at.toISOString()} between calls. ${tail}${screen}`
     }
     case 'idle-killed':
       return `${head} was terminated due to inactivity at ${reason.at.toISOString()}. ${tail}`
@@ -122,7 +107,20 @@ export function createTerminalUse(options: CreateOptions = {}): TerminalUse {
         if (prep.respawned) {
           response.setError(formatRespawnNotice(prep.respawned, prep.sessionId))
         } else {
-          await context.runWithSession(sessionId, () => tool.handler(request, response, context))
+          await context.runWithSession(sessionId, async () => {
+            const session = context.session()
+            if (session.exited && !tool.worksAfterExit) {
+              response.setError(
+                `${tag(sessionId, context.labelOf(sessionId))} ran \`${session.config.command}\`, which exited ` +
+                  `(${describeExit(session.exited)}) at ${session.exited.at.toISOString()}. There is no process ` +
+                  'left to send input to. Its final screen is still readable with terminal_read / ' +
+                  'terminal_screenshot; terminal_reset with hardReset: true runs the command again; ' +
+                  'terminal_destroy removes the session.'
+              )
+              return
+            }
+            await tool.handler(request, response, context)
+          })
         }
       }
     } catch (err) {

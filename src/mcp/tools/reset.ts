@@ -11,7 +11,8 @@ export const reset = defineTool({
     'Wipe the terminal buffer and scrollback. By default the shell process keeps running ' +
     '(env vars, cwd, history all preserved). Pass `hardReset: true` to kill the current shell ' +
     'and spawn a brand-new one — anything mid-execution gets killed. ' +
-    'When `hardReset: true`, you can also override `cols`, `rows`, `shell`, and `cwd`.',
+    'When `hardReset: true`, you can also override `cols`, `rows`, `shell`, and `cwd`. ' +
+    'In a session created with `command`, a hard reset runs that command again.',
   schema: {
     sessionId: requiredSessionIdField,
     hardReset: z
@@ -24,6 +25,7 @@ export const reset = defineTool({
     cwd: z.string().optional().describe('hardReset only: working directory for the new shell.')
   },
   annotations: {readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false},
+  worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()
     if (request.params.hardReset) {
@@ -34,14 +36,20 @@ export const reset = defineTool({
         cwd: request.params.cwd
       })
       response.appendLine(
-        `Hard reset: spawned a fresh ${session.config.shell} (pid ${session.pty.pid}) ` +
-          `at ${session.config.cwd}, ${session.term.cols}x${session.term.rows}.`
+        session.isCommand
+          ? `Hard reset: running \`${session.config.command}\` again (pid ${session.pty.pid}) ` +
+            `at ${session.config.cwd}, ${session.term.cols}x${session.term.rows}.`
+          : `Hard reset: spawned a fresh ${session.config.shell} (pid ${session.pty.pid}) ` +
+            `at ${session.config.cwd}, ${session.term.cols}x${session.term.rows}.`
       )
       response.appendBlank()
       appendBufferState(response, session.state())
       return
     }
 
+    if (!session.isAlive) {
+      throw new Error('The process has exited, so there is nothing to clear. Pass hardReset: true to run it again.')
+    }
     await session.softReset()
     response.appendLine(
       `Soft reset: buffer wiped, shell process (pid ${session.pty.pid}) preserved.`

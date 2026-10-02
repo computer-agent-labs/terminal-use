@@ -31,6 +31,9 @@ export const create = defineTool({
   description:
     'Spawn a new terminal session and return its sessionId. You must call this before any per-session ' +
     'tool — there is no shared default session. ' +
+    'By default the session is an interactive shell. Pass `command` to run one program in the terminal ' +
+    'instead (a TUI, a test run, a CLI under test): the session then lasts as long as that program, ' +
+    'reports its exit status when it ends, and keeps its final screen readable until you destroy it. ' +
     'If the server already holds 50 live sessions, the least-recently-used one is evicted to make room ' +
     "(its sessionId is tombstoned and any later call against it will respawn with an 'evicted' notice).",
   schema: {
@@ -44,6 +47,20 @@ export const create = defineTool({
     rows: z.number().int().min(1).max(1000).optional(),
     shell: z.string().optional().describe('Override the default shell (e.g. "/bin/zsh").'),
     cwd: z.string().optional().describe('Override the default working directory.'),
+    command: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'Run this command line instead of an interactive shell, e.g. "vim notes.txt" or "npm test". It is ' +
+          'run through the shell (`shell -c`), so quoting, pipes and redirection work. Input tools talk to ' +
+          'the program directly. When it exits, its exit status is reported, the final screen stays ' +
+          'readable, and nothing is restarted automatically.'
+      ),
+    env: z
+      .record(z.string(), z.string())
+      .optional()
+      .describe('Environment variables to set for the session, on top of the server\'s own environment.'),
     scrollback: z.number().int().min(100).max(50000).optional(),
     theme: z
       .enum(THEME_NAMES as [string, ...string[]])
@@ -65,6 +82,8 @@ export const create = defineTool({
       shell: request.params.shell,
       cwd: request.params.cwd,
       scrollback: request.params.scrollback,
+      command: request.params.command,
+      env: request.params.env,
       theme: request.params.theme as keyof typeof THEMES | undefined
     })
     response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)
