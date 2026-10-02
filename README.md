@@ -49,17 +49,38 @@ Every tool except `terminal_create` and `terminal_list` takes the `sessionId` th
 
 | Tool | What it does |
 |---|---|
-| `terminal_create` | Start a session (a shell on its own PTY). Optional `label`, `cols`, `rows`, `shell`, `cwd`, `scrollback`, `theme`. |
+| `terminal_create` | Start a session: an interactive shell, or one program with `command`. Optional `label`, `cols`, `rows`, `shell`, `cwd`, `env`, `scrollback`, `theme`. |
 | `terminal_list` | List sessions. |
 | `terminal_destroy` | End a session. |
-| `terminal_type` | Type text. `\n` presses Enter. |
+| `terminal_type` | Type text. `\n` presses Enter. `paste: true` sends it as one paste. |
 | `terminal_press` | Press a key or combination: `Enter`, `Ctrl+C`, `ArrowUp`, `Shift+Tab`, `Alt+Enter`, `F5`… |
 | `terminal_wait` | Wait for the running command to finish, for a regex to appear, or for output to go quiet. |
 | `terminal_read` | Read the screen or scrollback as text. |
 | `terminal_screenshot` | Render the screen as a PNG. |
 | `terminal_click` | Left-click a cell, with a preview step. |
+| `terminal_scroll` | Turn the mouse wheel over a cell. |
+| `terminal_batch` | Send several inputs in one call and get the screen back once. |
 | `terminal_resize` | Change the terminal size. |
 | `terminal_reset` | Clear the screen and scrollback, or restart the shell with `hardReset: true`. |
+
+## Shell sessions and command sessions
+
+By default a session is an interactive shell: type commands into it as you would at a prompt.
+
+Pass `command` to `terminal_create` to run one program in the terminal instead:
+
+```json
+{"command": "npm test -- --watch", "cwd": "/path/to/project", "env": {"CI": "1"}}
+```
+
+The command goes through the shell (`shell -c`), so quoting, pipes and redirection work. Input goes straight to the program. When it exits:
+
+- its exit status is reported (by the call that was in progress, by `terminal_wait`, and in `terminal_list`);
+- the final screen stays readable with `terminal_read` and `terminal_screenshot`;
+- input tools return an error with the exit status rather than restarting anything;
+- `terminal_reset` with `hardReset: true` runs it again, and `terminal_destroy` removes it.
+
+This is the mode for testing a CLI or TUI: launch it, drive it, check how it ended.
 
 ## Watching and typing along
 
@@ -96,8 +117,10 @@ agent ──MCP──▶ terminal-use ──▶ node-pty ──▶ your shell
 `terminal_type`, `terminal_press` and `terminal_click` return once output has been quiet for a moment (`idleMs`, default 200 ms) and never wait longer than 10 seconds. That suits keystrokes. It doesn't suit a build, which can be silent for a while long before it is done. For anything slow, follow up with `terminal_wait`:
 
 - **Default — wait for the command to finish.** terminal-use asks the kernel which process owns the terminal's foreground. A shell hands the terminal to each command it runs and takes it back afterwards, so when the shell owns it again, the prompt is back. This needs no shell integration or prompt parsing, and works for commands that print nothing.
-- **`pattern` — wait for a regex to match the screen.** For things that never exit (`Listening on port`), REPL prompts, or a particular state of a TUI. A leading `(?i)`, `(?m)` or `(?s)` sets flags.
+- **`pattern` — wait for a regex to match the screen.** For things that never exit (`Listening on port`), REPL prompts, or a particular state of a TUI. `^` and `$` match at line starts and ends; a leading `(?i)` or `(?s)` sets further flags.
 - **`until: "quiet"` — wait for output to stop** for `quietMs` (default 1 s). The same rule the typing tools use, without the 10-second cap.
+
+In a command session, the default mode waits for the program to exit and reports its exit status.
 
 `timeoutMs` defaults to 30 seconds (maximum 10 minutes). A timeout isn't an error: the response says the command is still running, and you can wait again.
 
@@ -106,6 +129,17 @@ Limits worth knowing: background jobs (`cmd &`) don't count as running. Inside a
 ### Reading the screen
 
 `terminal_read` returns text in screen-sized pages: `page: 0` is the current screen, `page: 1` the one before it, and so on back through scrollback.
+
+Lines the terminal wrapped at its right edge are joined back into the single line the program printed (`joinWrapped: false` gives one line per screen row).
+
+Text can't show color, so it can't show which menu entry is selected. Reads therefore end with a list of what is highlighted on screen — text in reverse video or on a background color — with the row and columns `terminal_click` takes:
+
+```
+Highlighted on screen (reverse video or background color; screen row, columns):
+  row 7, cols 3-18: "Unstaged changes"
+```
+
+If most of the screen is colored panels, the list is replaced by a pointer to `terminal_screenshot`. Turn it off with `highlights: false`.
 
 The cursor is marked with `▌`. On an empty cell it simply takes the place of the blank. On a character it is inserted in front of that character, which shifts the rest of that one line right by a column; the header says which character it is on. The marker is left out while the program hides the cursor (most full-screen programs do), and `cursor: false` returns the text untouched.
 
@@ -122,16 +156,38 @@ JetBrains Mono covers Latin, Greek, Cyrillic, box-drawing and common symbols. Em
 
 macOS has these out of the box. On Debian or Ubuntu, install them with `apt install fonts-noto-color-emoji fonts-noto-cjk`. Without them (a bare Docker image, say) those characters render as empty boxes in screenshots. Nerd Font and Powerline icons render as boxes everywhere. `terminal_read` is unaffected and always returns the real characters.
 
-### Clicking
+### Typing, pasting and batching
+
+`terminal_type` sends characters as keystrokes. For multi-line text going into an editor, a REPL or a shell prompt, add `paste: true`: programs that support bracketed paste receive it as one paste and insert it verbatim, without auto-indenting or running each line as it arrives. Programs that don't support it get the plain characters.
+
+`terminal_batch` sends a list of inputs in one call and returns the screen once at the end, which saves a round trip per keystroke when the steps are already known:
+
+```json
+{
+  "sessionId": 1,
+  "actions": [
+    {"type": "press", "key": "ArrowDown", "count": 3},
+    {"type": "press", "key": "Enter"},
+    {"type": "wait", "pattern": "Commit message"},
+    {"type": "type", "text": "Fix typo"},
+    {"type": "press", "key": "Ctrl+S"}
+  ]
+}
+```
+
+Actions are `type`, `paste`, `press`, `click`, `scroll` and `wait` (a fixed `ms`, or a `pattern` to appear). The batch is checked before anything is sent, and stops at the first action that fails, reporting how far it got.
+
+### Clicking and scrolling
 
 - Left button only. Coordinates are 1-indexed; `(1, 1)` is the top-left cell.
 - **`preview` is on by default.** A preview returns a screenshot with a ring drawn around the target cell and sends no click. Repeat the call with `preview: false` to click. Full-screen programs often have destructive actions one click away, so it is worth the extra step.
+- `terminal_scroll` turns the wheel over a cell. Programs that track the mouse get wheel events there, so the pane under the pointer scrolls; full-screen programs that don't (`less`, `man`) get arrow keys, as in a normal terminal. At a shell prompt there is nothing to scroll — read earlier output with `terminal_read` and `page`.
 - A real click needs the program to have turned on mouse reporting — `vim` with `set mouse=a`, `fzf`, `lazygit`, `htop` and most modern TUIs do. At a plain shell prompt the call returns an error instead of printing escape codes into your command line.
 
 ### Session lifecycle
 
 - Sessions are independent. Calls to one session run in order; calls to different sessions don't block each other.
-- If a session's shell exits, the session sits idle for six hours, or the 50-session limit is reached, the session is shut down but its id stays reserved for 30 days. The next call to that id starts a fresh shell with the same size, shell, working directory and theme, and returns a notice saying what happened — including the last screen the old shell printed, if it exited on its own. The command in that call is *not* run; send it again if you still want it.
+- If a shell session's shell exits, the session sits idle for six hours, or the 50-session limit is reached, the session is shut down but its id stays reserved for 30 days. The next call to that id starts a fresh shell with the same size, shell, working directory and theme, and returns a notice saying what happened — including the last screen the old shell printed, if it exited on its own. The command in that call is *not* run; send it again if you still want it.
 - Idle means no tool calls and no output. A dev server that is still printing is not idle.
 - `terminal_destroy` ends a session for good; its id is not reserved.
 - When the MCP client disconnects or the server is stopped, every shell is closed and every attach socket removed.

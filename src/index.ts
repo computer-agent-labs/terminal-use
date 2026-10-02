@@ -41,11 +41,16 @@ const INSTRUCTIONS = [
     'so what you read is what a person at that terminal would see (full-screen TUIs included).',
   'Workflow: terminal_create returns a sessionId; pass it to every other tool. Sessions outlive individual ' +
     'calls and are independent of each other, so several can be driven in parallel.',
+  'A session is an interactive shell by default. To run one program in the terminal — a TUI, a test run, a CLI ' +
+    'under test — pass `command` to terminal_create: you then get its exit status, and its final screen stays ' +
+    'readable after it ends.',
   'terminal_type and terminal_press return the screen once output has been quiet for a moment (capped at 10s). ' +
     'For anything slower — builds, installs, test runs, servers starting — follow up with terminal_wait rather ' +
     'than sleeping or polling terminal_read.',
-  'Prefer terminal_read (exact text, cheap) to understand the screen; use terminal_screenshot when colors, ' +
-    'layout or styling matter.',
+  'Prefer terminal_read (exact text, cheap) to understand the screen; it also lists what is highlighted, ' +
+    'which is how TUIs show the selected item. Use terminal_screenshot when colors, layout or styling matter.',
+  'When you already know the next several inputs (navigate a menu, fill a form), send them in one ' +
+    'terminal_batch call instead of one call per key. Use terminal_type with `paste: true` for multi-line text.',
   'If a call reports that the session was respawned (shell exited, idle, evicted), the command you sent was ' +
     'NOT run: a fresh shell is waiting, so re-issue it if still wanted.',
   'Call terminal_destroy when you are finished with a session.'
