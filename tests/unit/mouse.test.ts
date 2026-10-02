@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest'
 
-import {leftClickSequence} from '../../src/pty/mouse.js'
+import {leftClickSequence, wheelSequence} from '../../src/pty/mouse.js'
 
 describe('leftClickSequence', () => {
   it('produces the SGR press+release pair for left button at the given cell', () => {
@@ -30,5 +30,17 @@ describe('leftClickSequence', () => {
     const release = seq.slice(seq.indexOf('M') + 1)
     expect(press.endsWith('M')).toBe(true)
     expect(release.endsWith('m')).toBe(true)
+  })
+})
+
+describe('wheelSequence', () => {
+  it('sends wheel-up as button 64 and wheel-down as 65, press only', () => {
+    expect(wheelSequence('up', 10, 5)).toBe('\x1b[<64;10;5M')
+    expect(wheelSequence('down', 10, 5)).toBe('\x1b[<65;10;5M')
+  })
+
+  it('has a legacy encoding with the same single-byte limit as clicks', () => {
+    expect(wheelSequence('up', 1, 1, false)).toBe('\x1b[M`!!')
+    expect(() => wheelSequence('down', 200, 1, false)).toThrow(/legacy mouse encoding/)
   })
 })

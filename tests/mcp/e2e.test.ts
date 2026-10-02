@@ -19,7 +19,7 @@ afterEach(async () => {
 })
 
 describe('MCP end-to-end', () => {
-  it('lists all eleven tools', async () => {
+  it('lists all twelve tools', async () => {
     const list = await harness.client.listTools()
     const names = list.tools.map(t => t.name).sort()
     expect(names).toEqual(
@@ -33,6 +33,7 @@ describe('MCP end-to-end', () => {
         'terminal_reset',
         'terminal_resize',
         'terminal_screenshot',
+        'terminal_scroll',
         'terminal_type',
         'terminal_wait'
       ].sort()

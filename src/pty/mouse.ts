@@ -28,3 +28,21 @@ export function leftClickSequence(col: number, row: number, sgr = true): string 
   const xy = String.fromCharCode(32 + col) + String.fromCharCode(32 + row)
   return `\x1b[M${String.fromCharCode(32)}${xy}\x1b[M${String.fromCharCode(35)}${xy}`
 }
+
+export type WheelDirection = 'up' | 'down'
+
+/**
+ * Encode one notch of the mouse wheel at (col, row). Wheel events are
+ * buttons 64 (up) and 65 (down), sent as a press with no release.
+ */
+export function wheelSequence(direction: WheelDirection, col: number, row: number, sgr = true): string {
+  const button = direction === 'up' ? 64 : 65
+  if (sgr) return `\x1b[<${button};${col};${row}M`
+  if (col > LEGACY_MOUSE_MAX || row > LEGACY_MOUSE_MAX) {
+    throw new Error(
+      `The foreground program uses legacy mouse encoding, which cannot address (col ${col}, row ${row}) — ` +
+        `the limit is ${LEGACY_MOUSE_MAX}. Scroll at a cell nearer the top-left, or use PageUp/PageDown.`
+    )
+  }
+  return `\x1b[M${String.fromCharCode(32 + button)}${String.fromCharCode(32 + col)}${String.fromCharCode(32 + row)}`
+}

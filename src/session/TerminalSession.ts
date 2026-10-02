@@ -14,7 +14,7 @@ import {
   type BufferState
 } from '../emulator/terminal.js'
 import {keyToBytes} from '../pty/keys.js'
-import {leftClickSequence} from '../pty/mouse.js'
+import {leftClickSequence, wheelSequence, type WheelDirection} from '../pty/mouse.js'
 import {defaultShell, spawnPty, type IPty} from '../pty/spawn.js'
 
 export interface ExitInfo {
@@ -325,6 +325,46 @@ export class TerminalSession {
     const result = await settler
     await this.flush()
     return result
+  }
+
+  /**
+   * Turn the mouse wheel `amount` notches at (col, row), the way a terminal
+   * emulator would:
+   *  - the program tracks the mouse → it gets wheel events;
+   *  - it doesn't, but is on the alternate screen (less, man, older TUIs) →
+   *    the wheel becomes arrow keys, which is what terminals do there;
+   *  - a plain shell → nothing to deliver; the wheel would scroll the
+   *    terminal's own scrollback, which is read with terminal_read instead.
+   */
+  async scroll(
+    direction: WheelDirection,
+    amount: number,
+    col: number,
+    row: number,
+    settle: SettleOptions
+  ): Promise<SettleResult & {via: 'wheel' | 'arrows'}> {
+    this.#assertAlive()
+    let payload: string
+    let via: 'wheel' | 'arrows'
+    if (this.isMouseModeEnabled()) {
+      via = 'wheel'
+      payload = wheelSequence(direction, col, row, isSgrMouseEnabled(this.#term)).repeat(amount)
+    } else if (this.#term.buffer.active.type === 'alternate') {
+      via = 'arrows'
+      const key = direction === 'up' ? 'ArrowUp' : 'ArrowDown'
+      payload = keyToBytes(key, {applicationCursor: this.#term.modes.applicationCursorKeysMode}).repeat(amount)
+    } else {
+      throw new Error(
+        'Nothing to scroll: the foreground program is not full-screen and has not enabled the mouse, so the ' +
+          'wheel would only move the terminal\'s own scrollback. Read earlier output with terminal_read ' +
+          '(`page: 1` is the screen before this one).'
+      )
+    }
+    const settler = waitSettled(ptyAsSource(this.#pty), settle)
+    this.#pty.write(payload)
+    const result = await settler
+    await this.flush()
+    return {...result, via}
   }
 
   async resize(cols: number | undefined, rows: number | undefined): Promise<{cols: number; rows: number}> {
