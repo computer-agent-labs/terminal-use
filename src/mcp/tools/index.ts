@@ -1,5 +1,6 @@
 import type {ToolDefinition} from '../ToolDefinition.js'
 
+import {batch} from './batch.js'
 import {click} from './click.js'
 import {create} from './create.js'
 import {destroy} from './destroy.js'
@@ -14,6 +15,7 @@ import {typeText} from './type.js'
 import {wait} from './wait.js'
 
 export const TOOLS: ToolDefinition[] = [
+  batch,
   click,
   create,
   destroy,

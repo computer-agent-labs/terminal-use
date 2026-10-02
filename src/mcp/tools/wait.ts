@@ -2,7 +2,13 @@ import {z} from 'zod'
 
 import {defineTool} from '../ToolDefinition.js'
 
-import {appendBufferState, appendShellExited, renderReadWindow, requiredSessionIdField} from './shared.js'
+import {
+  appendBufferState,
+  appendShellExited,
+  compilePattern,
+  renderReadWindow,
+  requiredSessionIdField
+} from './shared.js'
 
 export const WAIT_MAX_MS = 10 * 60 * 1000
 const POLL_MS = 150
@@ -45,7 +51,8 @@ export const wait = defineTool({
       .optional()
       .describe(
         'JavaScript regular expression matched against the screen text, lines joined with "\\n" ' +
-          '(e.g. "Listening on .*:3000", "\\\\$ $", "(?i)error"). Omit to wait for command completion.'
+          '(e.g. "Listening on .*:3000", "^\\\\$ $", "(?i)error"). `^` and `$` match at the start and end of ' +
+          'each line. Omit to wait for command completion.'
       ),
     until: z
       .enum(['command', 'quiet'])
@@ -81,16 +88,7 @@ export const wait = defineTool({
     const until = request.params.until ?? 'command'
     const quietMs = request.params.quietMs ?? (until === 'quiet' ? 1000 : 300)
 
-    let regex: RegExp | undefined
-    if (request.params.pattern !== undefined) {
-      // Accept the common inline "(?i)" prefix; JS has no inline flags.
-      const m = /^\(\?([imsu]+)\)/.exec(request.params.pattern)
-      try {
-        regex = new RegExp(m ? request.params.pattern.slice(m[0].length) : request.params.pattern, m?.[1] ?? '')
-      } catch (err) {
-        throw new Error(`Invalid pattern: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    }
+    const regex = request.params.pattern === undefined ? undefined : compilePattern(request.params.pattern)
 
     const start = Date.now()
     let lastOutputAt = start

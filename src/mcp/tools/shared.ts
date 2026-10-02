@@ -201,3 +201,18 @@ function appendHighlights(response: McpResponse, win: ReadWindow): void {
   }
   if (h.omitted > 0) response.appendLine(`  …and ${h.omitted} more.`)
 }
+
+/**
+ * Compile a user-supplied screen pattern. The screen is many lines, so `^`
+ * and `$` always match at line boundaries; a leading "(?i)"-style prefix
+ * (which JS lacks) adds further flags.
+ */
+export function compilePattern(pattern: string): RegExp {
+  const m = /^\(\?([imsu]+)\)/.exec(pattern)
+  const flags = new Set(['m', ...(m?.[1] ?? '')])
+  try {
+    return new RegExp(m ? pattern.slice(m[0].length) : pattern, [...flags].join(''))
+  } catch (err) {
+    throw new Error(`Invalid pattern: ${err instanceof Error ? err.message : String(err)}`)
+  }
+}
