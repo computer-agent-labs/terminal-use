@@ -35,7 +35,7 @@ describe('soft-wrapped lines', () => {
   })
 
   it('keep the cursor on the right character of a wrapped command line', async () => {
-    const id = await createSession(harness.client, {cols: 30, rows: 12, shell: EDITING_SHELL})
+    const id = await createSession(harness.client, {cols: 30, rows: 12, ...EDITING_SHELL})
     await call(harness.client, 'terminal_type', {sessionId: id, text: `echo ${long}`, ...settle})
     const r = await call(harness.client, 'terminal_press', {sessionId: id, key: 'ArrowLeft', count: 6, ...settle})
     expect(r.text).toContain('india ▌juliet')

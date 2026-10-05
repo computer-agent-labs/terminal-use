@@ -163,7 +163,7 @@ describe('MCP end-to-end', () => {
   })
 
   it('the cursor marker goes in front of the character under the cursor, never over it', async () => {
-    const id = await createSession(harness.client, {shell: EDITING_SHELL})
+    const id = await createSession(harness.client, EDITING_SHELL)
     await call(harness.client, 'terminal_type', {sessionId: id, text: 'abcdef', idleMs: 250, maxWaitMs: 3000})
     const r = await call(harness.client, 'terminal_press', {
       sessionId: id,
@@ -177,7 +177,7 @@ describe('MCP end-to-end', () => {
   })
 
   it('finds the cursor by character, not by cell, after wide characters', async () => {
-    const id = await createSession(harness.client, {shell: EDITING_SHELL})
+    const id = await createSession(harness.client, EDITING_SHELL)
     await call(harness.client, 'terminal_type', {sessionId: id, text: '你好 xyz', idleMs: 250, maxWaitMs: 3000})
     const r = await call(harness.client, 'terminal_press', {
       sessionId: id,

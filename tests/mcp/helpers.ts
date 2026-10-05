@@ -1,3 +1,7 @@
+import {mkdirSync} from 'node:fs'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+
 import {Client, InMemoryTransport} from '@modelcontextprotocol/client'
 import {serveStdio} from '@modelcontextprotocol/server/stdio'
 
@@ -46,11 +50,18 @@ export async function startServer(
   }
 }
 
+// An empty HOME, so the shell below starts without the developer's own rc
+// files: a slow prompt or custom key bindings would make timing and editing
+// behave differently from one machine to the next.
+const EMPTY_HOME = join(tmpdir(), 'terminal-use-test-empty-home')
+mkdirSync(EMPTY_HOME, {recursive: true})
+
 /**
- * A shell with line editing (arrow keys move within the command line). The
- * default test shell, /bin/sh, is dash on Debian and Ubuntu, which has none.
+ * terminal_create arguments for a shell with line editing (arrow keys move
+ * within the command line). The default test shell, /bin/sh, is dash on
+ * Debian and Ubuntu, which has none.
  */
-export const EDITING_SHELL = '/bin/bash'
+export const EDITING_SHELL = {shell: '/bin/bash', env: {HOME: EMPTY_HOME}}
 
 /** Convenience: create a session and return its numeric sessionId. */
 export async function createSession(client: Client, opts: Record<string, unknown> = {}): Promise<number> {

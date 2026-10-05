@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('terminal_batch', () => {
   it('runs mixed actions in order and returns the screen once', async () => {
-    const id = await createSession(harness.client, {shell: EDITING_SHELL})
+    const id = await createSession(harness.client, EDITING_SHELL)
     const r = await call(harness.client, 'terminal_batch', {
       sessionId: id,
       actions: [
