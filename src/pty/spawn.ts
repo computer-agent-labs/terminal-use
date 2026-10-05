@@ -37,6 +37,14 @@ export function spawnPty(options: SpawnOptions): IPty {
   }
   Object.assign(cleanEnv, options.env)
   cleanEnv.TERM = cleanEnv.TERM ?? 'xterm-256color'
+  // The emulator always decodes the pty as UTF-8. With no locale set at all
+  // (a container, a service manager) programs fall back to the C locale and
+  // treat multi-byte characters as separate bytes: line editing over "你好"
+  // puts the cursor in the wrong place. Give them a UTF-8 one; anything the
+  // user did set is left alone.
+  if (!cleanEnv.LC_ALL && !cleanEnv.LC_CTYPE && !cleanEnv.LANG) {
+    cleanEnv.LANG = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8'
+  }
 
   // `shell -c` rather than exec'ing the words ourselves: the caller gets
   // quoting, pipes, redirection and PATH lookup exactly as at a prompt.
