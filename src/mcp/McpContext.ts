@@ -306,6 +306,22 @@ export class McpContext {
     return this.#describe(id)
   }
 
+  /**
+   * Wait for a freshly created shell to finish starting up (rc files read,
+   * prompt drawn). Without this the first input can land while the shell is
+   * still initializing: the terminal echoes it at once, output goes quiet,
+   * and the call returns before the shell has even looked at it.
+   */
+  async waitUntilReady(id: number): Promise<void> {
+    const session = this.#sessions.get(id)?.session
+    if (!session || session.isCommand) return
+    try {
+      await session.waitForReady()
+    } catch {
+      // The shell went away while starting; the next call will say so.
+    }
+  }
+
   destroySession(id: number): SessionDescriptor {
     const rec = this.#sessions.get(id)
     if (!rec) {

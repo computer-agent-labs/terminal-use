@@ -96,6 +96,7 @@ export const create = defineTool({
       login: request.params.login,
       theme: request.params.theme as keyof typeof THEMES | undefined
     })
+    await context.waitUntilReady(desc.sessionId)
     response.appendLine(`Created session ${desc.sessionId}${desc.label ? ` ("${desc.label}")` : ''}.`)
     response.appendLine(describeSessionLine(desc))
     response.appendBlank()
