@@ -256,6 +256,10 @@ claude mcp add terminal-use --scope user -- node "$PWD/bin/terminal-use.js"
 
 The code is laid out by layer: `src/pty` (spawning, key and mouse encoding), `src/emulator` (the xterm buffer, rendering, waiting), `src/session` (one terminal), `src/attach` (the socket you attach through) and `src/mcp` (the tools). The agent skill is in `skills/`.
 
+## Security
+
+terminal-use gives the connected client a shell on your machine, running as you, with no sandbox. Connect it only to clients you would trust with a terminal, and use your client's tool-approval settings to control what runs unprompted. It opens no network ports; attach sockets are restricted to your own user. See [SECURITY.md](SECURITY.md) for details and for how to report a vulnerability.
+
 ## Contributing
 
 Issues and pull requests are welcome. For anything larger than a small fix, opening an issue first to talk it through saves everyone time. Please run `yarn lint` and `yarn test` before sending a pull request, and add a test for behavior you change.
