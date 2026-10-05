@@ -46,6 +46,12 @@ export async function startServer(
   }
 }
 
+/**
+ * A shell with line editing (arrow keys move within the command line). The
+ * default test shell, /bin/sh, is dash on Debian and Ubuntu, which has none.
+ */
+export const EDITING_SHELL = '/bin/bash'
+
 /** Convenience: create a session and return its numeric sessionId. */
 export async function createSession(client: Client, opts: Record<string, unknown> = {}): Promise<number> {
   const r = await call(client, 'terminal_create', opts)

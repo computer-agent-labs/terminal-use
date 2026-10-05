@@ -1,6 +1,6 @@
 import {afterEach, beforeEach, describe, expect, it} from 'vitest'
 
-import {call, createSession, startServer, type ServerHarness} from './helpers.js'
+import {call, createSession, EDITING_SHELL, startServer, type ServerHarness} from './helpers.js'
 
 let harness: ServerHarness
 
@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('terminal_batch', () => {
   it('runs mixed actions in order and returns the screen once', async () => {
-    const id = await createSession(harness.client)
+    const id = await createSession(harness.client, {shell: EDITING_SHELL})
     const r = await call(harness.client, 'terminal_batch', {
       sessionId: id,
       actions: [
