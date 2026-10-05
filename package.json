@@ -38,11 +38,11 @@
   ],
   "scripts": {
     "clean": "node -e \"for (const d of ['dist', 'build']) require('fs').rmSync(d, {recursive: true, force: true})\"",
-    "build": "yarn clean && tsc -p tsconfig.build.json",
+    "build": "node -e \"for (const d of ['dist', 'build']) require('fs').rmSync(d, {recursive: true, force: true})\" && tsc -p tsconfig.build.json",
     "typecheck": "tsc",
     "lint": "eslint --cache .",
     "lint:fix": "eslint --cache --fix .",
-    "start": "yarn build && node bin/terminal-use.js",
+    "start": "npm run build && node bin/terminal-use.js",
     "dev": "tsx src/bin/terminal-use-main.ts",
     "smoke": "tsx scripts/smoke.ts",
     "test": "vitest run",
@@ -51,7 +51,7 @@
     "test:integration": "vitest run tests/integration",
     "test:mcp": "vitest run tests/mcp",
     "coverage": "vitest run --coverage",
-    "prepack": "yarn build"
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@lydell/node-pty": "^1.2.0-beta.12",
