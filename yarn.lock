@@ -1059,15 +1059,15 @@
     loupe "^3.1.2"
     tinyrainbow "^1.2.0"
 
-"@xterm/addon-serialize@^0.13.0":
-  version "0.13.0"
-  resolved "https://registry.yarnpkg.com/@xterm/addon-serialize/-/addon-serialize-0.13.0.tgz#f6e687708cacae67c4fc717fad37b9d11065897b"
-  integrity sha512-kGs8o6LWAmN1l2NpMp01/YkpxbmO4UrfWybeGu79Khw5K9+Krp7XhXbBTOTc3GJRRhd6EmILjpR8k5+odY39YQ==
+"@xterm/addon-serialize@^0.14.0":
+  version "0.14.0"
+  resolved "https://registry.yarnpkg.com/@xterm/addon-serialize/-/addon-serialize-0.14.0.tgz#70c9f6dcd4632b086a0aa0deafd0e26e7482843b"
+  integrity sha512-uteyTU1EkrQa2Ux6P/uFl2fzmXI46jy5uoQMKEOM0fKTyiW7cSn0WrFenHm5vO5uEXX/GpwW/FgILvv3r0WbkA==
 
-"@xterm/headless@^5.5.0":
-  version "5.5.0"
-  resolved "https://registry.yarnpkg.com/@xterm/headless/-/headless-5.5.0.tgz#823e76994b01cc5bfe69f2c2cba08095ee928aa0"
-  integrity sha512-5xXB7kdQlFBP82ViMJTwwEc3gKCLGKR/eoxQm4zge7GPBl86tCdI0IdPJjoKd8mUSFXz5V7i/25sfsEkP4j46g==
+"@xterm/headless@^6.0.0":
+  version "6.0.0"
+  resolved "https://registry.yarnpkg.com/@xterm/headless/-/headless-6.0.0.tgz#a839dee397c49834bb220fa5951d60f4b7f0aa11"
+  integrity sha512-5Yj1QINYCyzrZtf8OFIHi47iQtI+0qYFPHmouEfG8dHNxbZ9Tb9YGSuLcsEwj9Z+OL75GJqPyJbyoFer80a2Hw==
 
 acorn-jsx@^5.3.2:
   version "5.3.2"
