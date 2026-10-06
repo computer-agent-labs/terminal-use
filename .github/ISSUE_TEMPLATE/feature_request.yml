@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest something terminal-use should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What were you or the agent trying to do, and what got in the way?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like to happen
+      description: How should it work? A sketch of the tool call or response is helpful.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Workarounds you've tried

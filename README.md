@@ -262,7 +262,7 @@ terminal-use gives the connected client a shell on your machine, running as you,
 
 ## Contributing
 
-Issues and pull requests are welcome. For anything larger than a small fix, opening an issue first to talk it through saves everyone time. Please run `yarn lint` and `yarn test` before sending a pull request, and add a test for behavior you change.
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers setting up, running the tests, and what a good pull request looks like. This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md).
 
 ## License
 
