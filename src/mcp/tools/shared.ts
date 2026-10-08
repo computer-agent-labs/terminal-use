@@ -37,12 +37,14 @@ export function describeExit(exit: ExitInfo): string {
 export function describeSessionLine(d: SessionDescriptor): string {
   const tag = d.label ? `${d.sessionId} ("${d.label}")` : `${d.sessionId}`
   const idleSecs = Math.round((Date.now() - d.lastActivityAt.getTime()) / 1000)
+  // Windows reports no pid until the console host has started the process.
+  const pid = d.pid > 0 ? `pid=${d.pid} ` : ''
   const what =
     d.command === undefined
-      ? `pid=${d.pid} shell=${d.shell || '?'}`
+      ? `${pid}shell=${d.shell || '?'}`
       : d.exit
         ? `EXITED (${describeExit(d.exit)}) command=${JSON.stringify(d.command)}`
-        : `pid=${d.pid} command=${JSON.stringify(d.command)}`
+        : `${pid}command=${JSON.stringify(d.command)}`
   return `[${tag}] ${d.cols}x${d.rows} ${what} cwd=${d.cwd || '?'} theme=${d.theme} idle=${idleSecs}s`
 }
 

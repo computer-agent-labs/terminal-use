@@ -188,7 +188,15 @@ describe.runIf(process.platform === 'win32')('on Windows', () => {
 
   it('serves a client over stdio from the real binary, and exits when the client leaves', async () => {
     expect(existsSync(BIN)).toBe(true)
-    const transport = new StdioClientTransport({command: process.execPath, args: [BIN], stderr: 'ignore'})
+    // Hand the server this process's whole environment. By default the MCP
+    // client passes only a short allow-list, and on the hosted CI runners
+    // that drops PSModuleAnalysisCachePath: PowerShell then spends half a
+    // minute indexing the image's many preinstalled modules before it runs
+    // its first command.
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter((e): e is [string, string] => typeof e[1] === 'string')
+    )
+    const transport = new StdioClientTransport({command: process.execPath, args: [BIN], env, stderr: 'ignore'})
     const client = new Client({name: 'windows-stdio-test', version: '1.0.0'}, {capabilities: {}})
     await client.connect(transport)
     const pid = transport.pid
