@@ -41,13 +41,16 @@ describe.runIf(process.platform === 'win32')('on Windows', () => {
     const {id, text} = await create()
     expect(text).toMatch(/shell=powershell\.exe/i)
     // Concatenated, so the typed command itself cannot satisfy the match.
-    const r = await call(harness.client, 'terminal_type', {
+    const typed = await call(harness.client, 'terminal_type', {
       sessionId: id,
       text: "Write-Output ('hel' + 'lo-win')\n",
       ...settle
     })
-    expect(r.isError).toBe(false)
-    expect(r.text).toMatch(/^hello-win$/m)
+    expect(typed.isError).toBe(false)
+    // A freshly started PowerShell can take over a second to run its first
+    // command, longer than any reasonable settle window: wait for the output.
+    const r = await call(harness.client, 'terminal_wait', {sessionId: id, pattern: '^hello-win$', timeoutMs: 20000})
+    expect(r.text).toMatch(/matched after/)
     expect(r.text).toMatch(/^PS .*>/m)
   })
 
@@ -126,11 +129,12 @@ describe.runIf(process.platform === 'win32')('on Windows', () => {
     const {id} = await create()
     const resized = await call(harness.client, 'terminal_resize', {sessionId: id, cols: 100, rows: 30})
     expect(resized.text).toMatch(/to 100x30/)
-    const r = await call(harness.client, 'terminal_type', {
+    await call(harness.client, 'terminal_type', {
       sessionId: id,
       text: "Write-Output ('wid' + 'th=' + $Host.UI.RawUI.WindowSize.Width)\n",
       ...settle
     })
+    const r = await call(harness.client, 'terminal_wait', {sessionId: id, pattern: '^width=\\d+$', timeoutMs: 20000})
     expect(r.text).toMatch(/^width=100$/m)
   })
 
@@ -191,12 +195,9 @@ describe.runIf(process.platform === 'win32')('on Windows', () => {
     try {
       const created = await call(client, 'terminal_create', {})
       expect(created.isError).toBe(false)
-      const typed = await call(client, 'terminal_type', {
-        sessionId: 1,
-        text: "Write-Output ('over-' + 'stdio')\n",
-        ...settle
-      })
-      expect(typed.text).toMatch(/^over-stdio$/m)
+      await call(client, 'terminal_type', {sessionId: 1, text: "Write-Output ('over-' + 'stdio')\n", ...settle})
+      const waited = await call(client, 'terminal_wait', {sessionId: 1, pattern: '^over-stdio$', timeoutMs: 20000})
+      expect(waited.text).toMatch(/matched after/)
     } finally {
       await client.close()
     }
