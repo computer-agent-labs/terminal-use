@@ -62,7 +62,7 @@ claude mcp add terminal-use-dev --scope user -- node "$PWD/bin/terminal-use.js"
 
 - **One change per pull request**, with a description of what it fixes or adds and why.
 - **Tests for the behavior you changed.** Most behavior is best tested end to end in `tests/mcp/`, driving a real shell through the MCP client the way an agent would.
-- **Tests that pass on macOS and Linux.** CI runs both. `/bin/sh` is bash on macOS but dash on Debian and Ubuntu, which has no line editing; a test that moves the cursor within a command line should create its session with `EDITING_SHELL` from `tests/mcp/helpers.ts`.
+- **Tests that pass on macOS and Linux.** CI runs both. (Windows runs a separate suite, `tests/windows`, against PowerShell; add to it when you change something platform-specific.) `/bin/sh` is bash on macOS but dash on Debian and Ubuntu, which has no line editing; a test that moves the cursor within a command line should create its session with `EDITING_SHELL` from `tests/mcp/helpers.ts`.
 - **Docs updated** when you change what a tool does: its description in `src/mcp/tools/`, the README, and the skill in `skills/terminal-use` if it mentions the behavior.
 - **Code that matches its surroundings.** ESLint enforces the style (no semicolons, single quotes, two-space indentation, ordered imports); `yarn lint:fix` handles most of it.
 - **Commit messages** with a short imperative subject line, such as `Fix cursor position after wide characters`.

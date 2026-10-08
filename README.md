@@ -11,7 +11,7 @@ Most agent shell tools run a command and hand back its output. That breaks down 
 
 ## Quick start
 
-Requires Node.js 20.19 or newer, on macOS or Linux.
+Requires Node.js 20.19 or newer, on macOS, Linux or Windows.
 
 **Claude Code**
 
@@ -38,7 +38,7 @@ Server options go after the command: `npx -y terminal-use --cols 100 --rows 40`.
 
 | Option | Default | |
 |---|---|---|
-| `--shell <path>` | `$SHELL` or `/bin/bash` | Shell to run in new sessions |
+| `--shell <path>` | `$SHELL` or `/bin/bash`; PowerShell on Windows | Shell to run in new sessions |
 | `--cwd <path>` | where the server was started | Working directory for new sessions |
 | `--cols <n>` / `--rows <n>` | `120` / `30` | Terminal size |
 | `--scrollback <n>` | `5000` | Lines of history kept |
@@ -48,7 +48,7 @@ Server options go after the command: `npx -y terminal-use --cols 100 --rows 40`.
 
 If programs that work in your own terminal (`node`, `brew`, `pyenv`…) are missing inside a session, the server probably inherited a bare environment. That happens when the MCP client is started from the Dock or a launcher instead of a terminal: your `PATH` is set up by your shell's profile files (`~/.zprofile`, `~/.bash_profile`, `~/.profile`), and nothing has read them.
 
-A login shell reads those files. Turn it on for every session with the `--login` server flag, or for one session with `login: true` on `terminal_create`. It is off by default because it makes each shell slower to start and runs whatever your profile runs.
+A login shell reads those files. Turn it on for every session with the `--login` server flag, or for one session with `login: true` on `terminal_create`. It is off by default because it makes each shell slower to start and runs whatever your profile runs. It has no effect in PowerShell or `cmd.exe`, which have no login mode.
 
 ## Tools
 
@@ -93,7 +93,7 @@ Pass `command` to `terminal_create` to run one program in the terminal instead:
 {"command": "npm test -- --watch", "cwd": "/path/to/project", "env": {"CI": "1"}}
 ```
 
-The command goes through the shell (`shell -c`), so quoting, pipes and redirection work. Input goes straight to the program. When it exits:
+The command goes through the session's shell (`sh -c`, PowerShell `-Command`, or `cmd /c`), so quoting, pipes and redirection work as they do at that shell's prompt. Input goes straight to the program. When it exits:
 
 - its exit status is reported (by the call that was in progress, by `terminal_wait`, and in `terminal_list`);
 - the final screen stays readable with `terminal_read` and `terminal_screenshot`;
@@ -115,6 +115,7 @@ You see what the agent sees and can type into the same shell. It works like a sh
 - You get the current screen and recent scrollback on connect, not a blank terminal.
 - `--resize` makes the session follow your window size. By default the session keeps its own.
 - `--socket` picks the server. Each MCP client runs its own terminal-use, and they all number sessions from 1; without `--socket`, `attach <id>` works when only one running server has that id and lists the candidates otherwise.
+- On Windows the session is reached through a named pipe instead of a socket file; the command you are given works the same way.
 - Sockets are per-user (`0600`, inside a `0700` directory under the system temp dir). Anyone who can connect gets a shell as you, so they are not exposed any further than that.
 
 ## How it works
@@ -144,6 +145,8 @@ In a command session, the default mode waits for the program to exit and reports
 
 `timeoutMs` defaults to 30 seconds (maximum 10 minutes). A timeout isn't an error: the response says the command is still running, and you can wait again.
 
+On Windows there is no way to ask who owns the terminal, so in a shell session the default mode waits for two seconds of silence instead, and says it is a guess. Prefer a `pattern` there, or run the program as a command session, where waiting for it to exit works on every platform.
+
 Limits worth knowing: background jobs (`cmd &`) don't count as running. Inside a nested program such as `ssh` or a REPL, the outer shell doesn't get the foreground back until that program exits, so use `pattern` or `until: "quiet"` there. No exit status is reported; run `echo $?`.
 
 ### Reading the screen
@@ -172,9 +175,10 @@ JetBrains Mono covers Latin, Greek, Cyrillic, box-drawing and common symbols. Em
 | | Emoji | CJK | Hangul |
 |---|---|---|---|
 | macOS | Apple Color Emoji | Hiragino Sans GB / PingFang | Apple SD Gothic Neo |
+| Windows | Segoe UI Emoji | Microsoft YaHei / Yu Gothic | Malgun Gothic |
 | Linux | Noto Color Emoji | Noto Sans CJK | Noto Sans CJK |
 
-macOS has these out of the box. On Debian or Ubuntu, install them with `apt install fonts-noto-color-emoji fonts-noto-cjk`. Without them (a bare Docker image, say) those characters render as empty boxes in screenshots. Nerd Font and Powerline icons render as boxes everywhere. `terminal_read` is unaffected and always returns the real characters.
+macOS has these out of the box, and Windows has the emoji font (the East Asian fonts come with the matching language features). On Debian or Ubuntu, install them with `apt install fonts-noto-color-emoji fonts-noto-cjk`. Without them (a bare Docker image, say) those characters render as empty boxes in screenshots. Nerd Font and Powerline icons render as boxes everywhere. `terminal_read` is unaffected and always returns the real characters.
 
 ### Typing, pasting and batching
 
@@ -222,9 +226,11 @@ Stateless refers to the protocol, not the terminals: sessions live in the server
 
 | | |
 |---|---|
-| macOS (arm64, x64) | Supported |
-| Linux (arm64, x64) | Supported |
-| Windows | Untested. It may start, but nothing has been run there. |
+| macOS (arm64, x64) | Supported; tested in CI |
+| Linux (arm64, x64) | Supported; tested in CI on Node 20, 22 and 24 |
+| Windows (x64) | Supported; tested in CI against PowerShell and `cmd.exe` |
+
+On Windows, sessions run through ConPTY, the default shell is Windows PowerShell, and two things differ: `terminal_wait` cannot detect that a shell command has finished (see *Waiting for things*), and `login` does nothing. Screenshots on Windows are covered by tests but have not been checked by eye the way macOS and Linux ones have.
 
 The native dependencies (`node-pty`, `@napi-rs/canvas`) ship prebuilt binaries, so no compiler is needed to install.
 
@@ -245,6 +251,7 @@ yarn dev            # run the server straight from source
 yarn lint           # eslint
 yarn typecheck      # tsc, no output
 yarn test:unit      # unit tests only
+yarn test:windows   # what CI runs on Windows: shell-independent tests + tests/windows
 yarn smoke          # quick end-to-end check without an MCP client
 ```
 

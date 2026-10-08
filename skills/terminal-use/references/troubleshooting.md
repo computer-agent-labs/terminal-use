@@ -29,6 +29,12 @@ The default wait asks whether the shell has the terminal back. Two cases fool it
 - **Background jobs** (`cmd &`): the shell gets the terminal back immediately. Wait with a `pattern` for the job's output instead.
 - **You are inside another program** (ssh, a REPL, a container shell, tmux): the *outer* shell is what terminal-use watches, and it will not be back until that program exits. Use a `pattern` for the inner prompt, or `until: "quiet"`.
 
+## On Windows, terminal_wait says it is guessing
+
+Windows offers no way to ask whether the shell has the terminal back, so in a shell session the default wait falls back to "output has been quiet for a while". Give it a `pattern` (PowerShell's prompt is `^PS .*>`), or run the program as a command session: waiting for a command session to exit works everywhere and reports the exit code.
+
+A freshly started PowerShell can also take a second or more to run its first command, so the first `terminal_type` may return before any output. Follow it with `terminal_wait` and a `pattern`.
+
 ## terminal_wait times out, but the command looks finished
 
 Something is still holding the terminal: a pager waiting for `q`, a prompt waiting for an answer, a program waiting for input. Read the screen.

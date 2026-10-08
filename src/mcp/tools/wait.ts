@@ -29,7 +29,9 @@ export const wait = defineTool({
     'DEFAULT (no `pattern`): waits for the running command to finish — i.e. for the shell to take the ' +
     "terminal's foreground back and its prompt to go quiet. This asks the kernel who owns the terminal, so " +
     'it works with any prompt and stays correct while a command is silent (`sleep 60`) or chatty. Returns ' +
-    'immediately if the shell is already at its prompt. In a session created with `command`, it waits for ' +
+    'immediately if the shell is already at its prompt. On Windows this cannot be detected in a shell ' +
+    'session: the call waits for a stretch of silence instead and says so — prefer `pattern` there. ' +
+    'In a session created with `command`, it waits for ' +
     'that command to exit and reports its exit status. Background jobs (`cmd &`) do not count as running, ' +
     'and inside a nested program (ssh, a REPL, a TUI) the outer shell never regains the foreground until ' +
     'that program exits — use `pattern` there.\n\n' +

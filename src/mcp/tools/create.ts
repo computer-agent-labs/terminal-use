@@ -48,7 +48,10 @@ export const create = defineTool({
       .describe('Optional human-readable name shown in terminal_list output (e.g. "dev-server").'),
     cols: z.number().int().min(1).max(1000).optional(),
     rows: z.number().int().min(1).max(1000).optional(),
-    shell: z.string().optional().describe('Override the default shell (e.g. "/bin/zsh").'),
+    shell: z
+      .string()
+      .optional()
+      .describe('Override the default shell (e.g. "/bin/zsh"; on Windows "pwsh.exe" or "cmd.exe" instead of PowerShell).'),
     cwd: z.string().optional().describe('Override the default working directory.'),
     command: z
       .string()
@@ -56,7 +59,8 @@ export const create = defineTool({
       .optional()
       .describe(
         'Run this command line instead of an interactive shell, e.g. "vim notes.txt" or "npm test". It is ' +
-          'run through the shell (`shell -c`), so quoting, pipes and redirection work. Input tools talk to ' +
+          "run through the session's shell (`sh -c`; on Windows PowerShell `-Command`, or `cmd /c`), so " +
+          "quoting, pipes and redirection work as at that shell's prompt. Input tools talk to " +
           'the program directly. When it exits, its exit status is reported, the final screen stays ' +
           'readable, and nothing is restarted automatically.'
       ),
@@ -67,7 +71,8 @@ export const create = defineTool({
         'Start the shell as a login shell (`-l`), so it reads the profile files (~/.zprofile, ' +
           '~/.bash_profile, ~/.profile) where PATH is usually set up. Use it when tools that work in the ' +
           "user's own terminal are \"command not found\" here — typical when the MCP client was started " +
-          'from a GUI rather than a terminal. Slower to start. Default false (or the server\'s --login flag).'
+          'from a GUI rather than a terminal. Slower to start. No effect in PowerShell or cmd.exe. Default ' +
+          'false (or the server\'s --login flag).'
       ),
     env: z
       .record(z.string(), z.string())

@@ -26,6 +26,8 @@ Use it for anything a one-shot shell command cannot do: programs that take over 
 - **Shell session** (default): an interactive shell. Use it when you will run several commands, or need shell state (cwd, variables, an activated environment).
 - **Command session**: pass `command` to `terminal_create` (for example `"vim notes.txt"` or `"npm test"`). The session *is* that program. Use it to run one program, and always when you need to know how it ended: its exit status is reported when it exits, and its final screen stays readable afterwards. It is never restarted behind your back.
 
+On Windows the default shell is PowerShell: use PowerShell syntax (`$env:NAME`, `;` between commands), or pass `shell: "cmd.exe"`.
+
 Set `cwd` and `env` at creation rather than typing `cd` and `export`. If tools the user has installed are "command not found", create the session with `login: true`.
 
 ## Sending input
