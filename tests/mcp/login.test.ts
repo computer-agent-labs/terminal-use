@@ -26,7 +26,10 @@ const settle = {idleMs: 300, maxWaitMs: 4000}
 async function profileMarker(args: Record<string, unknown>): Promise<string> {
   const created = await call(harness.client, 'terminal_create', {env: {HOME: home}, ...args})
   const id = Number(created.text.match(/Created session (\d+)/)![1])
-  const r = await call(harness.client, 'terminal_type', {sessionId: id, text: 'echo marker=[$FROM_PROFILE]\n', ...settle})
+  await call(harness.client, 'terminal_type', {sessionId: id, text: 'echo marker=[$FROM_PROFILE]\n', ...settle})
+  // A login shell can still be working through the system profile when the
+  // prompt first shows; wait for the command to finish rather than for quiet.
+  const r = await call(harness.client, 'terminal_wait', {sessionId: id, timeoutMs: 15000})
   return r.text.match(/^marker=\[(.*)\]$/m)![1]!
 }
 
