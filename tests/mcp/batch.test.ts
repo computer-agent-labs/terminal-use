@@ -81,6 +81,22 @@ describe('terminal_batch', () => {
     expect(r.text).not.toMatch(/too late/)
   })
 
+  it('counts the process exiting on the final action as the batch completing', async () => {
+    const r0 = await call(harness.client, 'terminal_create', {command: 'cat'})
+    const id = Number(r0.text.match(/Created session (\d+)/)![1])
+    const r = await call(harness.client, 'terminal_batch', {
+      sessionId: id,
+      actions: [
+        {type: 'type', text: 'line\n'},
+        {type: 'press', key: 'Ctrl+D'}
+      ]
+    })
+    expect(r.isError).toBe(false)
+    expect(r.text).toMatch(/Ran all 2 actions; the process exited after the last one/)
+    expect(r.text).not.toMatch(/were not sent/)
+    expect(r.text).toMatch(/The command exited \(exit code 0\)/)
+  })
+
   it('a fixed wait pauses between actions', async () => {
     const id = await createSession(harness.client)
     const started = Date.now()

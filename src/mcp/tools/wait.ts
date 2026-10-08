@@ -41,8 +41,8 @@ export const wait = defineTool({
     'REPL prompts, or TUI states. Text that is already on screen counts, so pick a pattern that only the ' +
     'new output can satisfy.\n\n' +
     'Returns the screen when the condition is met, or when `timeoutMs` runs out (not an error — the ' +
-    'response says the command is still running). Does not report an exit status; run `echo $?` afterwards ' +
-    'if you need it.',
+    'response says the command is still running). In a shell session this does not report an exit status; run ' +
+    '`echo $?` afterwards if you need it.',
   schema: {
     sessionId: requiredSessionIdField,
     pattern: z

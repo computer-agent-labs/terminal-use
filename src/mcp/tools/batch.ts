@@ -230,6 +230,12 @@ export const batch = defineTool({
           `Stopped at action ${done + 1} of ${actions.length} (${next ? describe(next) : '?'}): ${failure}. ` +
             `${done} action${done === 1 ? '' : 's'} before it ${done === 1 ? 'was' : 'were'} sent; the rest were not.`
         )
+      } else if (done === actions.length) {
+        // Exiting on the last action is the batch succeeding (":wq", "q"),
+        // not being cut short.
+        response.appendLine(
+          `Ran all ${actions.length} action${actions.length === 1 ? '' : 's'}; the process exited after the last one.`
+        )
       } else {
         response.appendLine(
           `Stopped after action ${done} of ${actions.length} (${describe(actions[done - 1] ?? actions[0]!)}): ` +
