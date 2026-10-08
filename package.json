@@ -45,6 +45,7 @@
     "start": "npm run build && node bin/terminal-use.js",
     "dev": "tsx src/bin/terminal-use-main.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "demo": "tsx scripts/make-demo.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:unit": "vitest run tests/unit",

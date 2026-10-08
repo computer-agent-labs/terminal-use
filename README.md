@@ -2,6 +2,10 @@
 
 An [MCP](https://modelcontextprotocol.io) server that lets an AI agent use a real terminal the way a person does: type, press keys, click, read the screen, take a screenshot.
 
+![An agent opening vim, pasting a program, saving it, running it, and taking a screenshot — each step labelled with the tool call that made it](docs/demo.gif)
+
+*Every frame above was drawn by terminal-use's own screenshot renderer; the caption on each is the tool call that produced it.*
+
 Most agent shell tools run a command and hand back its output. That breaks down for anything interactive — `vim`, `htop`, a REPL, an installer asking questions, `git rebase -i`, an SSH session. terminal-use gives the agent a shell on a real pseudo-terminal, rendered by a real terminal emulator, so full-screen and interactive programs work and the agent sees what you would see.
 
 - **Real PTY, real emulator** — colors, cursor movement and the alternate screen are interpreted, not passed along as escape codes.
@@ -168,7 +172,11 @@ The cursor is marked with `▌`. On an empty cell it simply takes the place of t
 
 ### Screenshots
 
-`terminal_screenshot` renders the screen with the bundled JetBrains Mono. Sessions take a `theme` at creation: `dark` (default), `light`, `solarized-dark` or `solarized-light`.
+`terminal_screenshot` renders the screen with the bundled JetBrains Mono. This is what a call returns, here with a visual selection in vim:
+
+![A terminal_screenshot of vim with Python syntax highlighting and four lines selected](docs/screenshot.png)
+
+Sessions take a `theme` at creation: `dark` (default), `light`, `solarized-dark` or `solarized-light`.
 
 JetBrains Mono covers Latin, Greek, Cyrillic, box-drawing and common symbols. Emoji, Chinese/Japanese and Korean text fall back to fonts already on the system, because bundling them would add tens of megabytes:
 
@@ -253,6 +261,7 @@ yarn typecheck      # tsc, no output
 yarn test:unit      # unit tests only
 yarn test:windows   # what CI runs on Windows: shell-independent tests + tests/windows
 yarn smoke          # quick end-to-end check without an MCP client
+yarn demo           # regenerate docs/demo.gif (needs ffmpeg, vim and python3)
 ```
 
 To point your MCP client at a local checkout, build it and use the path to the bin script:
