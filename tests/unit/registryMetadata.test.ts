@@ -23,4 +23,13 @@ describe('MCP registry metadata', () => {
   it('keeps the description within the registry limit', () => {
     expect(server.description.length).toBeLessThanOrEqual(100)
   })
+
+  it('declares the bin without a leading "./", which npm strips the whole entry for on publish', () => {
+    // npm 11 "auto-corrects" `./bin/x.js` by removing the bin, and the
+    // published package then has no command at all.
+    for (const target of Object.values(pkg.bin as Record<string, string>)) {
+      expect(target).not.toMatch(/^\.\//)
+    }
+    expect(Object.keys(pkg.bin)).toEqual([pkg.name])
+  })
 })

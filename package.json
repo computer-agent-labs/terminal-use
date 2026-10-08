@@ -25,7 +25,7 @@
     "url": "git+https://github.com/computer-agent-labs/terminal-use.git"
   },
   "bin": {
-    "terminal-use": "./bin/terminal-use.js"
+    "terminal-use": "bin/terminal-use.js"
   },
   "main": "./dist/index.js",
   "files": [
