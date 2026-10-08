@@ -105,3 +105,29 @@ describe('renderer pixel-level regression', () => {
     term.dispose()
   })
 })
+
+// macOS and Windows always ship a color-emoji font; Linux only with the
+// optional Noto package, which the CI image does not have.
+describe.runIf(process.platform === 'darwin' || process.platform === 'win32')('system font fallback', () => {
+  it('draws emoji in color, from the system emoji font', async () => {
+    const term = createTerminal({cols: 10, rows: 3})
+    await writeAndFlush(term, '\u{1F389}')
+    const result = renderToPng(term, {fontSize: 32, drawCursor: false})
+    const img = await loadImage(result.buffer)
+    const c = createCanvas(img.width, img.height)
+    const ctx = c.getContext('2d')
+    ctx.drawImage(img, 0, 0)
+    const {data} = ctx.getImageData(0, 0, Math.min(img.width, 80), Math.min(img.height, 60))
+    // The missing-glyph box and plain text are drawn in the gray foreground
+    // color. Strongly saturated pixels can only come from a color glyph.
+    let saturated = 0
+    for (let i = 0; i < data.length; i += 4) {
+      const max = Math.max(data[i]!, data[i + 1]!, data[i + 2]!)
+      const min = Math.min(data[i]!, data[i + 1]!, data[i + 2]!)
+      if (max - min > 90) saturated++
+    }
+    expect(saturated).toBeGreaterThan(20)
+    term.dispose()
+  })
+})
+
