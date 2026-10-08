@@ -93,11 +93,11 @@ describe.runIf(process.platform === 'win32')('on Windows', () => {
   })
 
   it('sets environment variables and the working directory', async () => {
-    const cwd = process.env.TEMP ?? 'C:\\Windows\\Temp'
+    const cwd = process.env.SystemRoot ?? 'C:\\Windows'
     const {id} = await create({command: 'Write-Output "v=$env:TU_TEST_VAR"; (Get-Location).Path', env: {TU_TEST_VAR: 'set'}, cwd})
     const r = await call(harness.client, 'terminal_wait', {sessionId: id, timeoutMs: 20000})
     expect(r.text).toMatch(/^v=set$/m)
-    expect(r.text.toLowerCase()).toContain(cwd.toLowerCase().replace(/\\$/, ''))
+    expect(r.text.toLowerCase()).toContain(cwd.toLowerCase())
   })
 
   it('waits for output by pattern, and by quiet, while a command runs', async () => {

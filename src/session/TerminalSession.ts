@@ -82,6 +82,8 @@ export interface CursorInText {
 export type ForegroundState = 'shell' | 'command' | 'unknown'
 
 const FLUSH_CAP_MS = 500
+/** Longest a new shell is given to draw its first prompt. */
+const READY_CAP_MS = 15000
 const PASTE_START = '\x1b[200~'
 const PASTE_END = '\x1b[201~'
 
@@ -266,8 +268,17 @@ export class TerminalSession {
    */
   async waitForReady(): Promise<void> {
     this.#assertAlive()
-    await waitSettled(ptyAsSource(this.#pty), {idleMs: 200, maxWaitMs: 3000})
-    await this.flush()
+    // Quiet output alone is not "ready": a slow starter (PowerShell takes
+    // seconds on a cold machine, and the Windows console emits its setup
+    // sequences long before that) is silent while it loads. Keep waiting
+    // until something is actually drawn — in practice, the prompt.
+    const deadline = Date.now() + READY_CAP_MS
+    for (;;) {
+      await waitSettled(ptyAsSource(this.#pty), {idleMs: 200, maxWaitMs: 3000})
+      await this.flush()
+      if (this.#disposed || this.#exited || Date.now() >= deadline) return
+      if (this.#captureScreen().some(line => line.trim() !== '')) return
+    }
   }
 
   /**
