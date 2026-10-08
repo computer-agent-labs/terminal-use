@@ -36,7 +36,7 @@ export const screenshot = defineTool({
       .optional()
       .describe('Absolute path to write the PNG to. If unset, image is inlined as base64.')
   },
-  annotations: {readOnlyHint: true, openWorldHint: false},
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false},
   worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()

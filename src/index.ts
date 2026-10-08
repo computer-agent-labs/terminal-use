@@ -61,6 +61,14 @@ const INSTRUCTIONS = [
 
 const PROGRESS_INTERVAL_FLOOR_MS = 1000
 
+const REPOSITORY_URL = 'https://github.com/computer-agent-labs/terminal-use'
+// Served from the repository rather than bundled: clients fetch icons by URL.
+const ICON_BASE = 'https://raw.githubusercontent.com/computer-agent-labs/terminal-use/main/docs'
+export const ICONS = [
+  {src: `${ICON_BASE}/icon.png`, mimeType: 'image/png', sizes: ['512x512']},
+  {src: `${ICON_BASE}/icon.svg`, mimeType: 'image/svg+xml', sizes: ['any']}
+]
+
 export interface TerminalUse {
   /**
    * Build an MCP server exposing the terminal tools. May be called more
@@ -152,7 +160,9 @@ export function createTerminalUse(options: CreateOptions = {}): TerminalUse {
       {
         name: 'terminal-use',
         title: 'terminal-use',
-        version: VERSION
+        version: VERSION,
+        websiteUrl: REPOSITORY_URL,
+        icons: ICONS
       },
       {
         capabilities: {

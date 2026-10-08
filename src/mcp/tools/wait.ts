@@ -83,7 +83,7 @@ export const wait = defineTool({
           '(default 1000) it is the whole condition.'
       )
   },
-  annotations: {readOnlyHint: true, openWorldHint: false},
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false},
   worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()

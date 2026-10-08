@@ -61,7 +61,7 @@ export const read = defineTool({
           'Set to false if you need the unmodified text.'
       )
   },
-  annotations: {readOnlyHint: true, openWorldHint: false},
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false},
   worksAfterExit: true,
   handler: async (request, response, context) => {
     const session = context.session()

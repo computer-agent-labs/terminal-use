@@ -1,6 +1,8 @@
-import {readFileSync} from 'node:fs'
+import {existsSync, readFileSync} from 'node:fs'
 
 import {describe, expect, it} from 'vitest'
+
+import {ICONS} from '../../src/index.js'
 
 const read = (name: string) => JSON.parse(readFileSync(new URL(`../../${name}`, import.meta.url), 'utf8'))
 
@@ -18,6 +20,14 @@ describe('MCP registry metadata', () => {
     expect(server.version).toBe(pkg.version)
     expect(server.packages).toHaveLength(1)
     expect(server.packages[0]).toMatchObject({registryType: 'npm', identifier: pkg.name, version: pkg.version})
+  })
+
+  it('lists the same icons the server announces, and both files exist in the repository', () => {
+    expect(server.icons).toEqual(ICONS)
+    for (const icon of ICONS) {
+      const file = icon.src.replace('https://raw.githubusercontent.com/computer-agent-labs/terminal-use/main/', '')
+      expect(existsSync(new URL(`../../${file}`, import.meta.url)), file).toBe(true)
+    }
   })
 
   it('keeps the description within the registry limit', () => {

@@ -11,7 +11,7 @@ export const list = defineTool({
     'doing so respawns a fresh shell under the same id and surfaces the original termination reason ' +
     '(shell-exit, idle-killed, or evicted). Tombstones expire after 30 days; after that the id is gone.',
   schema: {},
-  annotations: {readOnlyHint: true, openWorldHint: false},
+  annotations: {readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false},
   needsSession: false,
   handler: async (_request, response, context) => {
     const sessions = context.listSessions()

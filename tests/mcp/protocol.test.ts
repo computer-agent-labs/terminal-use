@@ -31,9 +31,12 @@ describe.each(ERAS)('protocol era: %s', era => {
     const {tools} = await harness.client.listTools()
     const names = tools.map(t => t.name)
     expect(names).toEqual([...names].sort())
+    // Directories require every tool to state these three outright, not
+    // leave them to the protocol's defaults.
     for (const tool of tools) {
       expect(tool.title, tool.name).toBeTruthy()
       expect(tool.annotations?.readOnlyHint, tool.name).toBeTypeOf('boolean')
+      expect(tool.annotations?.destructiveHint, tool.name).toBeTypeOf('boolean')
       expect(tool.annotations?.openWorldHint, tool.name).toBeTypeOf('boolean')
     }
     const byName = Object.fromEntries(tools.map(t => [t.name, t]))
@@ -44,6 +47,14 @@ describe.each(ERAS)('protocol era: %s', era => {
       openWorldHint: true
     })
     expect(byName.terminal_type!.inputSchema.required).toEqual(expect.arrayContaining(['sessionId', 'text']))
+  })
+
+  it('identifies itself with a website and HTTPS icons', async () => {
+    harness = await startServer({}, era)
+    const info = harness.client.getServerVersion()
+    expect(info?.websiteUrl).toBe('https://github.com/computer-agent-labs/terminal-use')
+    expect(info?.icons?.length).toBeGreaterThan(0)
+    for (const icon of info!.icons!) expect(icon.src).toMatch(/^https:\/\//)
   })
 
   it('keeps a terminal alive across independent calls, addressed only by sessionId', async () => {
