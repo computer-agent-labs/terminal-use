@@ -46,7 +46,7 @@ export function findSockets(sessionId: number, dir = socketDir()): string[] {
     return []
   }
   for (const name of entries) {
-    const m = /^terminal-use-(\d+)-\d+\.sock$/.exec(name)
+    const m = /^(\d+)-\d+\.sock$/.exec(name)
     if (!m) continue
     const path = join(dir, name)
     if (!isProcessAlive(Number.parseInt(m[1]!, 10))) {
@@ -129,7 +129,7 @@ export async function runAttachClient(rawArgs: string[]): Promise<void> {
     if (found.length === 0) {
       console.error(
         `Could not find a socket for session ${sessionId}. Looked under ${socketDir()} ` +
-          'for `terminal-use-*-' +
+          'for `*-' +
           sessionId +
           '.sock`. The terminal-use MCP server may not be running, or this session id ' +
           "doesn't exist. Try --socket=PATH if you know the exact path."

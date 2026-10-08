@@ -17,7 +17,7 @@ describe('terminal_create response includes attach info', () => {
     const r = await call(harness.client, 'terminal_create', {label: 'attach-info'})
     expect(r.isError).toBe(false)
     expect(r.text).toMatch(/node .* attach 1\b/)
-    expect(r.text).toMatch(/terminal-use-\d+-1\.sock/)
+    expect(r.text).toMatch(/terminal-use-\d+\/\d+-1\.sock/)
     expect(r.text).toMatch(/Ctrl\+\]/)
   })
 
@@ -34,7 +34,7 @@ describe('terminal_create response includes attach info', () => {
     const r = await call(harness.client, 'terminal_create', {})
     expect(r.isError).toBe(false)
     // tmpdir() is /tmp on Linux but /var/folders/.../T on macOS — match either.
-    const match = r.text.match(/\S*terminal-use-\d+-\d+\.sock/)
+    const match = r.text.match(/\S*terminal-use-\d+\/\d+-\d+\.sock/)
     expect(match).not.toBeNull()
     const {existsSync, statSync} = await import('node:fs')
     expect(existsSync(match![0])).toBe(true)

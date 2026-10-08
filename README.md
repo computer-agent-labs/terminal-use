@@ -107,7 +107,7 @@ This is the mode for testing a CLI or TUI: launch it, drive it, check how it end
 `terminal_create` returns a command you can run in your own terminal to join the session:
 
 ```
-node /path/to/terminal-use/bin/terminal-use.js attach 3 --socket /tmp/terminal-use-501/terminal-use-41234-3.sock
+node /path/to/terminal-use/bin/terminal-use.js attach 3 --socket /tmp/terminal-use-501/41234-3.sock
 ```
 
 You see what the agent sees and can type into the same shell. It works like a shared `tmux` session: several people can attach at once, and **Ctrl+]** detaches.

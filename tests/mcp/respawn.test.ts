@@ -90,7 +90,7 @@ describe('shutdown', () => {
   it('closing the server removes its attach sockets', async () => {
     const {existsSync} = await import('node:fs')
     const r = await call(harness.client, 'terminal_create', {})
-    const socket = r.text.match(/\S*terminal-use-\d+-\d+\.sock/)![0]
+    const socket = r.text.match(/\S*terminal-use-\d+\/\d+-\d+\.sock/)![0]
     expect(existsSync(socket)).toBe(true)
     await harness.shutdown()
     expect(existsSync(socket)).toBe(false)

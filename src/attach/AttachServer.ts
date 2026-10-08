@@ -31,7 +31,10 @@ export function socketPathFor(serverPid: number, sessionId: number): string {
   // Windows has no filesystem Unix sockets; node's net module wants a
   // named pipe there. (Untested on Windows — see README.)
   if (IS_WINDOWS) return `\\\\.\\pipe\\terminal-use-${serverPid}-${sessionId}`
-  return join(socketDir(), `terminal-use-${serverPid}-${sessionId}.sock`)
+  // The directory already carries the name. Keep the file name short: a
+  // Unix socket path is limited to about 100 bytes, and macOS's per-user
+  // temp directory alone uses half of that.
+  return join(socketDir(), `${serverPid}-${sessionId}.sock`)
 }
 
 interface ClientState {

@@ -4,7 +4,7 @@ import {join} from 'node:path'
 
 import {afterEach, describe, expect, it} from 'vitest'
 
-import {AttachServer} from '../../src/attach/AttachServer.js'
+import {AttachServer, socketPathFor} from '../../src/attach/AttachServer.js'
 import {
   encodeData,
   encodeDetach,
@@ -23,7 +23,9 @@ interface ClientHandle {
 }
 
 function tmpSocketPath(label: string): string {
-  return join(tmpdir(), `terminal-use-test-${process.pid}-${label}-${Date.now()}.sock`)
+  // Short on purpose: a Unix socket path may be at most ~100 bytes, and
+  // macOS's temp directory already takes half of that.
+  return join(tmpdir(), `tu-${process.pid}-${label}.sock`)
 }
 
 function waitMs(ms: number): Promise<void> {
@@ -89,6 +91,13 @@ function makeServerSession(): {server: AttachServer; session: TerminalSession; u
 }
 
 describe('AttachServer over a Unix socket', () => {
+  it('keeps socket paths well inside the Unix socket path limit', () => {
+    // sun_path is 104 bytes on macOS and 108 on Linux. Budget for a 7-digit
+    // pid and a 2-digit session id, and leave slack for longer temp dirs.
+    const worstCase = socketPathFor(9999999, 50)
+    expect(Buffer.byteLength(worstCase)).toBeLessThanOrEqual(92)
+  })
+
   it('replays the current screen to a client that attaches late', async () => {
     const {server, session} = makeServerSession()
     await session.waitForReady()
