@@ -1,0 +1,5 @@
+# Keep line endings as committed on every platform. The skill files are
+# hashed byte for byte, and tests compare exact output.
+* text=auto eol=lf
+*.ttf binary
+*.png binary

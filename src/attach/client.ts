@@ -37,6 +37,7 @@ function isProcessAlive(pid: number): boolean {
  * with this id.
  */
 export function findSockets(sessionId: number, dir = socketDir()): string[] {
+  if (process.platform === 'win32') return findPipes(sessionId)
   const suffix = `-${sessionId}.sock`
   const candidates: Array<{path: string; mtime: number}> = []
   let entries: string[] = []
@@ -67,6 +68,29 @@ export function findSockets(sessionId: number, dir = socketDir()): string[] {
   }
   candidates.sort((a, b) => b.mtime - a.mtime)
   return candidates.map(c => c.path)
+}
+
+/**
+ * Windows has named pipes instead of socket files. They live in one global
+ * namespace, are listed by reading `\\\\.\\pipe\\`, and vanish with the
+ * process that owns them, so there is nothing stale to clean up.
+ */
+function findPipes(sessionId: number): string[] {
+  const root = '\\\\.\\pipe\\'
+  let entries: string[] = []
+  try {
+    entries = readdirSync(root)
+  } catch {
+    return []
+  }
+  const found: string[] = []
+  for (const name of entries) {
+    const m = /^terminal-use-(\d+)-(\d+)$/.exec(name)
+    if (m && Number.parseInt(m[2]!, 10) === sessionId && isProcessAlive(Number.parseInt(m[1]!, 10))) {
+      found.push(root + name)
+    }
+  }
+  return found
 }
 
 function getTerminalSize(): {cols: number; rows: number} {

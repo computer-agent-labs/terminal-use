@@ -22,6 +22,9 @@ const BIN_PATH = (() => {
 })()
 
 function shellQuote(s: string): string {
+  // Windows paths are full of backslashes, and neither cmd.exe nor
+  // PowerShell reads POSIX single-quote escapes; double quotes work in both.
+  if (process.platform === 'win32') return /^[\w@%+=:,./\\-]+$/.test(s) ? s : `"${s}"`
   return /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`
 }
 

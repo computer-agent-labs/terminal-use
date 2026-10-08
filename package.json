@@ -50,6 +50,7 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:mcp": "vitest run tests/mcp",
+    "test:windows": "vitest run -c vitest.windows.config.ts",
     "coverage": "vitest run --coverage",
     "prepack": "npm run build"
   },

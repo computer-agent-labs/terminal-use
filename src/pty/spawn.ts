@@ -23,11 +23,47 @@ export interface SpawnOptions {
 
 export type IPty = nodePty.IPty
 
+const IS_WINDOWS = process.platform === 'win32'
+
 export function defaultShell(): string {
-  if (process.platform === 'win32') {
-    return process.env.COMSPEC ?? 'powershell.exe'
-  }
+  // PowerShell rather than cmd.exe: it is what Windows Terminal opens, and
+  // the commands an agent reaches for (ls, cat, rm, pipes of objects) exist.
+  if (IS_WINDOWS) return 'powershell.exe'
   return process.env.SHELL ?? '/bin/bash'
+}
+
+type ShellFamily = 'posix' | 'powershell' | 'cmd'
+
+export function shellFamily(shell: string): ShellFamily {
+  const name = (shell.split(/[\\/]/).pop() ?? shell).toLowerCase().replace(/\.exe$/, '')
+  if (name === 'powershell' || name === 'pwsh') return 'powershell'
+  if (name === 'cmd') return 'cmd'
+  return 'posix'
+}
+
+/**
+ * Arguments that make `shell` either sit at an interactive prompt or run
+ * one command line and exit with that command's status.
+ */
+export function shellArgs(shell: string, command: string | undefined, login: boolean): string[] {
+  switch (shellFamily(shell)) {
+    case 'powershell':
+      if (command === undefined) return ['-NoLogo']
+      // `-Command` alone exits 0 or 1. Pass on a native program's real exit
+      // code when there is one, and 1 when a cmdlet failed.
+      return [
+        '-NoLogo',
+        '-Command',
+        `& { ${command} }; $ok = $?; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE }; if (-not $ok) { exit 1 }`
+      ]
+    case 'cmd':
+      return command === undefined ? [] : ['/d', '/s', '/c', command]
+    case 'posix':
+      // `shell -c` rather than exec'ing the words ourselves: the caller
+      // gets quoting, pipes, redirection and PATH lookup exactly as at a
+      // prompt. `-l` makes it a login shell.
+      return [...(login ? ['-l'] : []), ...(command === undefined ? [] : ['-c', command])]
+  }
 }
 
 export function spawnPty(options: SpawnOptions): IPty {
@@ -36,23 +72,20 @@ export function spawnPty(options: SpawnOptions): IPty {
     if (typeof v === 'string') cleanEnv[k] = v
   }
   Object.assign(cleanEnv, options.env)
-  cleanEnv.TERM = cleanEnv.TERM ?? 'xterm-256color'
-  // The emulator always decodes the pty as UTF-8. With no locale set at all
-  // (a container, a service manager) programs fall back to the C locale and
-  // treat multi-byte characters as separate bytes: line editing over "你好"
-  // puts the cursor in the wrong place. Give them a UTF-8 one; anything the
-  // user did set is left alone.
-  if (!cleanEnv.LC_ALL && !cleanEnv.LC_CTYPE && !cleanEnv.LANG) {
-    cleanEnv.LANG = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8'
+  if (!IS_WINDOWS) {
+    cleanEnv.TERM = cleanEnv.TERM ?? 'xterm-256color'
+    // The emulator always decodes the pty as UTF-8. With no locale set at
+    // all (a container, a service manager) programs fall back to the C
+    // locale and treat multi-byte characters as separate bytes: line
+    // editing over "你好" puts the cursor in the wrong place. Give them a
+    // UTF-8 one; anything the user did set is left alone.
+    if (!cleanEnv.LC_ALL && !cleanEnv.LC_CTYPE && !cleanEnv.LANG) {
+      cleanEnv.LANG = process.platform === 'darwin' ? 'en_US.UTF-8' : 'C.UTF-8'
+    }
   }
 
-  // `shell -c` rather than exec'ing the words ourselves: the caller gets
-  // quoting, pipes, redirection and PATH lookup exactly as at a prompt.
-  const args = [
-    ...(options.login ? ['-l'] : []),
-    ...(options.command === undefined ? [] : ['-c', options.command])
-  ]
-  return nodePty.spawn(options.shell ?? defaultShell(), args, {
+  const shell = options.shell ?? defaultShell()
+  return nodePty.spawn(shell, shellArgs(shell, options.command, options.login === true), {
     name: 'xterm-256color',
     cols: options.cols,
     rows: options.rows,

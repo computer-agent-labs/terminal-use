@@ -39,3 +39,21 @@ jobs:
       - run: yarn test
       # What `npm publish` would upload: fails if the build or file list is broken.
       - run: npm pack --dry-run
+
+  windows:
+    name: windows-latest / Node 22
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn lint
+      - run: yarn typecheck
+      # The main suite drives /bin/sh; this runs the shell-independent tests
+      # plus the Windows end-to-end tests against PowerShell and cmd.exe.
+      - run: yarn test:windows
+      - run: npm pack --dry-run

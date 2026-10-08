@@ -26,7 +26,8 @@ export async function startServer(
   // Pin to /bin/sh for deterministic prompts across machines. The user's
   // actual shell is exercised by the manual smoke script and the live MCP run.
   const terminalUse = createTerminalUse({
-    defaults: {shell: '/bin/sh'},
+    // (On Windows there is no /bin/sh: take the product default, PowerShell.)
+    defaults: {shell: process.platform === 'win32' ? undefined : '/bin/sh'},
     sweepIntervalMs: 0,
     ...extra
   })

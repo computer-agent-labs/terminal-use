@@ -43,17 +43,20 @@ const SYSTEM_FALLBACKS: SystemFallback[] = [
     family: 'EmojiFallback',
     paths: [
       '/System/Library/Fonts/Apple Color Emoji.ttc',
+      'C:\\Windows\\Fonts\\seguiemj.ttf',
       '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf',
       '/usr/share/fonts/google-noto-color-emoji-fonts/NotoColorEmoji.ttf',
       '/usr/share/fonts/noto/NotoColorEmoji.ttf'
     ],
-    systemFamilies: ['Apple Color Emoji', 'Noto Color Emoji']
+    systemFamilies: ['Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji']
   },
   {
     // CJK: kana + Han, incl. kaomoji like ¯\_(ツ)_/¯ (ツ is U+30C4).
     family: 'CJKFallback',
     paths: [
       '/System/Library/Fonts/Hiragino Sans GB.ttc',
+      'C:\\Windows\\Fonts\\msyh.ttc',
+      'C:\\Windows\\Fonts\\YuGothR.ttc',
       '/System/Library/Fonts/PingFang.ttc',
       '/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc',
       ...NOTO_CJK_PATHS
@@ -70,8 +73,8 @@ const SYSTEM_FALLBACKS: SystemFallback[] = [
     // Hangul — the Hiragino/PingFang families above don't cover it. (Noto
     // Sans CJK does, so on Linux this is usually the same file again.)
     family: 'HangulFallback',
-    paths: ['/System/Library/Fonts/AppleSDGothicNeo.ttc', ...NOTO_CJK_PATHS],
-    systemFamilies: ['Noto Sans CJK KR', 'NanumGothic', 'UnDotum']
+    paths: ['/System/Library/Fonts/AppleSDGothicNeo.ttc', 'C:\\Windows\\Fonts\\malgun.ttf', ...NOTO_CJK_PATHS],
+    systemFamilies: ['Malgun Gothic', 'Noto Sans CJK KR', 'NanumGothic', 'UnDotum']
   }
 ]
 const registeredFallbacks: string[] = []
