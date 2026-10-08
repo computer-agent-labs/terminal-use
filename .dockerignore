@@ -1,0 +1,12 @@
+node_modules
+dist
+build
+coverage
+docs
+tests
+.git
+.github
+.claude
+chrome-devtools-mcp
+*.log
+.eslintcache

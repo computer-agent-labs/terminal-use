@@ -58,3 +58,14 @@ jobs:
       # plus the Windows end-to-end tests against PowerShell and cmd.exe.
       - run: yarn test:windows
       - run: npm pack --dry-run
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker build -t terminal-use .
+      # The image's whole job is to start the server; make sure it does.
+      - run: docker run --rm terminal-use --version
+

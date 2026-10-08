@@ -74,6 +74,17 @@ Every tool except `terminal_create` and `terminal_list` takes the `sessionId` th
 | `terminal_resize` | Change the terminal size. |
 | `terminal_reset` | Clear the screen and scrollback, or restart the shell with `hardReset: true`. |
 
+## Docker
+
+The repository has a [Dockerfile](Dockerfile) for running the server in a container:
+
+```bash
+docker build -t terminal-use .
+docker run -i --rm -v "$PWD":/workspace terminal-use
+```
+
+In an MCP client, use `docker` as the command with `run -i --rm terminal-use` as its arguments. The terminals the agent gets are then shells inside the container, not on your machine: it sees only what you mount, which is the point if you want it boxed in. Attaching from your own terminal is not available in this setup.
+
 ## The skill
 
 terminal-use comes with an [Agent Skill](https://agentskills.io): a short guide for the agent on how to use these tools well — when to use a command session, how to wait, how to read what is selected — plus recipes for vim, pagers, REPLs, menu-driven programs, ssh prompts and end-to-end testing of a TUI. It lives in [`skills/terminal-use`](skills/terminal-use).
@@ -238,7 +249,7 @@ Stateless refers to the protocol, not the terminals: sessions live in the server
 | Linux (arm64, x64) | Supported; tested in CI on Node 20, 22 and 24 |
 | Windows (x64) | Supported; tested in CI against PowerShell and `cmd.exe` |
 
-On Windows, sessions run through ConPTY, the default shell is Windows PowerShell, and two things differ: `terminal_wait` cannot detect that a shell command has finished (see *Waiting for things*), and `login` does nothing. Screenshots on Windows are covered by tests but have not been checked by eye the way macOS and Linux ones have.
+On Windows, sessions run through ConPTY, the default shell is Windows PowerShell, and two things differ: `terminal_wait` cannot detect that a shell command has finished (see *Waiting for things*), and `login` does nothing.
 
 The native dependencies (`node-pty`, `@napi-rs/canvas`) ship prebuilt binaries, so no compiler is needed to install.
 
