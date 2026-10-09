@@ -17,13 +17,17 @@ Most agent shell tools run a command and hand back its output. That breaks down 
 
 Requires Node.js 20.19 or newer, on macOS, Linux or Windows.
 
-**Claude Code**
+Pick your client:
 
-```bash
-claude mcp add terminal-use --scope user -- npx -y terminal-use
-```
+| Client | How to add it |
+|---|---|
+| **Claude Code** | `claude mcp add terminal-use --scope user -- npx -y terminal-use` |
+| **Cursor** | [Add to Cursor](https://cursor.com/install-mcp?name=terminal-use&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsInRlcm1pbmFsLXVzZSJdfQ%3D%3D) |
+| **VS Code** | [Add to VS Code](https://vscode.dev/redirect/mcp/install?name=terminal-use&config=%7B%22name%22%3A%22terminal-use%22%2C%22type%22%3A%22stdio%22%2C%22command%22%3A%22npx%22%2C%22args%22%3A%5B%22-y%22%2C%22terminal-use%22%5D%7D) |
+| **Codex** | `codex mcp add terminal-use -- npx -y terminal-use` |
+| **Gemini CLI** | `gemini mcp add -s user terminal-use npx -y terminal-use` |
 
-**Other MCP clients** (Claude Desktop, Cursor, and anything else that takes a command):
+**Claude Desktop, and any other client that takes a command**: add this to its MCP configuration (for Claude Desktop: Settings → Developer → Edit Config).
 
 ```json
 {
