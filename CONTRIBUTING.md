@@ -19,7 +19,7 @@ Open an issue first and describe the problem you are trying to solve. For anythi
 
 ## Making a change
 
-You need Node.js 20.19 or newer and [Yarn 1](https://classic.yarnpkg.com).
+You need Node.js 22.12 or newer and [Yarn 1](https://classic.yarnpkg.com).
 
 ```bash
 git clone https://github.com/computer-agent-labs/terminal-use.git

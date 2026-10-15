@@ -15,7 +15,7 @@ Most agent shell tools run a command and hand back its output. That breaks down 
 
 ## Quick start
 
-Requires Node.js 20.19 or newer, on macOS, Linux or Windows.
+Requires Node.js 22.12 or newer, on macOS, Linux or Windows.
 
 Pick your client:
 
@@ -250,7 +250,7 @@ Stateless refers to the protocol, not the terminals: sessions live in the server
 | | |
 |---|---|
 | macOS (arm64, x64) | Supported; tested in CI |
-| Linux (arm64, x64) | Supported; tested in CI on Node 20, 22 and 24 |
+| Linux (arm64, x64) | Supported; tested in CI on Node 22, 24 and 26 |
 | Windows (x64) | Supported; tested in CI against PowerShell and `cmd.exe` |
 
 On Windows, sessions run through ConPTY, the default shell is Windows PowerShell, and two things differ: `terminal_wait` cannot detect that a shell command has finished (see *Waiting for things*), and `login` does nothing.

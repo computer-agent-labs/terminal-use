@@ -8,9 +8,9 @@ process.title = 'terminal-use'
 
 const [major = 0, minor = 0] = process.versions.node.split('.').map(Number)
 
-if (major < 20 || (major === 20 && minor < 19) || (major === 22 && minor < 12)) {
+if (major < 22 || (major === 22 && minor < 12)) {
   console.error(
-    `ERROR: terminal-use does not support Node ${process.version}. Please upgrade to Node 20.19.0 LTS, 22.12.0 LTS, or newer.`
+    `ERROR: terminal-use does not support Node ${process.version}. Please upgrade to Node 22.12.0 LTS or newer.`
   )
   process.exit(1)
 }
