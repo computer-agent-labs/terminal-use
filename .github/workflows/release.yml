@@ -1,0 +1,80 @@
+name: Release
+
+# Publishes a version to npm and the MCP Registry when its tag is pushed:
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# Neither step uses a stored secret. npm trusts this workflow file through
+# trusted publishing (configured on the package), and the MCP Registry accepts
+# the GitHub OIDC token for the io.github.computer-agent-labs namespace.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  release:
+    name: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: release
+    permissions:
+      contents: read
+      # The OIDC token both registries authenticate with.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      # Node 26 bundles npm 11, which trusted publishing needs.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: yarn
+          registry-url: https://registry.npmjs.org
+
+      # The tag, package.json and server.json must all name the same version,
+      # or npm and the registry would end up disagreeing.
+      - name: Check versions match the tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(jq -r .version package.json)"
+          srv="$(jq -r .version server.json)"
+          srv_pkg="$(jq -r '.packages[0].version' server.json)"
+          echo "tag=$tag package.json=$pkg server.json=$srv server.json package=$srv_pkg"
+          [ "$tag" = "$pkg" ] && [ "$tag" = "$srv" ] && [ "$tag" = "$srv_pkg" ]
+
+      - run: yarn install --frozen-lockfile
+      - run: yarn lint
+      - run: yarn typecheck
+      - run: yarn test
+
+      # prepack builds dist/. Provenance is attached automatically. Skipped
+      # when this version is already on npm, so a rerun after a failed
+      # registry step does not fail here.
+      - name: npm publish
+        run: |
+          if npm view "terminal-use@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "terminal-use@${GITHUB_REF_NAME#v} is already on npm; skipping"
+          else
+            npm publish
+          fi
+
+      - name: Install mcp-publisher
+        run: |
+          archive=mcp-publisher_linux_amd64.tar.gz
+          curl -fsSL -o "$archive" \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/${archive}"
+          echo "${MCP_PUBLISHER_SHA256}  ${archive}" | sha256sum -c -
+          tar xzf "$archive" mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
