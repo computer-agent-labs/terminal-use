@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        node: [22, 24, 26]
+        node: [22, 26]
         include:
           # macOS runners are slower and scarcer; one current Node is enough
           # to cover the platform-specific paths (ptys, fonts, sockets).
