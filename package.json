@@ -1,6 +1,6 @@
 {
   "name": "terminal-use",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "mcpName": "io.github.computer-agent-labs/terminal-use",
   "description": "MCP server that lets AI agents drive a real PTY/TTY",
   "license": "MIT",
